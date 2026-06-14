@@ -3,10 +3,11 @@
   "name": "Manga Area Translator MVP",
   "version": "0.1.0",
   "description": "Select manga text area and translate Japanese text to Traditional Chinese.",
-  "permissions": ["activeTab", "scripting", "tabs"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
   "host_permissions": ["http://localhost:8787/*"],
   "action": {
-    "default_title": "框選漫畫翻譯"
+    "default_title": "漫畫翻譯選單",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"

@@ -5,11 +5,54 @@ let startX = 0;
 let startY = 0;
 let box = null;
 
+initializeFloatingButton();
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes.floatingButtonEnabled) return;
+  setFloatingButtonVisible(changes.floatingButtonEnabled.newValue);
+});
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'MANGA_TRANSLATOR_START_SELECT') {
     startSelectionMode();
   }
+
+  if (message.type === 'MANGA_TRANSLATOR_CLEAR_RESULTS') {
+    clearResults();
+  }
+
+  if (message.type === 'MANGA_TRANSLATOR_SET_FLOATING_BUTTON') {
+    setFloatingButtonVisible(message.enabled);
+  }
 });
+
+function clearResults() {
+  document.querySelectorAll('.manga-translator-result').forEach((el) => el.remove());
+}
+
+async function initializeFloatingButton() {
+  const { floatingButtonEnabled = false } = await chrome.storage.local.get(
+    'floatingButtonEnabled'
+  );
+  setFloatingButtonVisible(floatingButtonEnabled);
+}
+
+function setFloatingButtonVisible(enabled) {
+  document.querySelector('#manga-translator-floating-button')?.remove();
+  if (!enabled) return;
+
+  const button = document.createElement('button');
+  button.id = 'manga-translator-floating-button';
+  button.type = 'button';
+  button.textContent = '框選翻譯';
+  button.title = '框選漫畫文字並翻譯';
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    startSelectionMode();
+  });
+  document.body.appendChild(button);
+}
 
 function showToast(text, duration = 2200) {
   const old = document.querySelector('.manga-translator-toast');
@@ -44,7 +87,12 @@ function stopSelectionMode() {
 }
 
 function onMouseDown(e) {
-  if (e.button !== 0) return;
+  if (
+    e.button !== 0 ||
+    e.target.closest('#manga-translator-floating-button')
+  ) {
+    return;
+  }
   e.preventDefault();
   e.stopPropagation();
 
@@ -174,21 +222,72 @@ function showResult(rect, result) {
   close.textContent = '×';
   close.onclick = () => el.remove();
 
-  const text = document.createElement('div');
-  text.textContent = formatResultText(
+  const content = document.createElement('div');
+  content.className = 'manga-translator-result-content';
+
+  const originalText = document.createElement('div');
+  originalText.className = 'manga-translator-result-line';
+  originalText.textContent = `${formatResultText(
+    result.ocrText || '無辨識結果'
+  )}`;
+
+  const translatedText = document.createElement('div');
+  translatedText.className = 'manga-translator-result-line';
+  translatedText.textContent = `${formatResultText(
     result.translatedText || result.text || '沒有翻譯結果'
-  );
+  )}`;
+
+  content.appendChild(originalText);
+  content.appendChild(translatedText);
 
   el.appendChild(close);
-  el.appendChild(text);
+  el.appendChild(content);
   document.body.appendChild(el);
+  makeDraggable(el);
+}
+
+function makeDraggable(el) {
+  el.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || event.target.closest('button')) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startLeft = el.offsetLeft;
+    const startTop = el.offsetTop;
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    el.classList.add('is-dragging');
+
+    function onDrag(moveEvent) {
+      moveEvent.preventDefault();
+
+      const maxLeft = Math.max(0, window.innerWidth - el.offsetWidth);
+      const maxTop = Math.max(0, window.innerHeight - el.offsetHeight);
+      const nextLeft = startLeft + moveEvent.clientX - startX;
+      const nextTop = startTop + moveEvent.clientY - startY;
+
+      el.style.left = `${Math.min(Math.max(0, nextLeft), maxLeft)}px`;
+      el.style.top = `${Math.min(Math.max(0, nextTop), maxTop)}px`;
+    }
+
+    function stopDragging() {
+      el.classList.remove('is-dragging');
+      window.removeEventListener('mousemove', onDrag, true);
+      window.removeEventListener('mouseup', stopDragging, true);
+    }
+
+    window.addEventListener('mousemove', onDrag, true);
+    window.addEventListener('mouseup', stopDragging, true);
+  });
 }
 
 function formatResultText(value) {
   return String(value)
     .trim()
-    .replace(/([。．])\s*/g, '$1\n')
-    .replace(/([^.])\.(?!\.)\s*/g, '$1.\n')
+    .replace(/([。])\s*/g, '$1\n')
+    // .replace(/([^.])\.(?!\.)\s*/g, '$1.\n')
     .replace(/\n{2,}/g, '\n')
     .trim();
 }

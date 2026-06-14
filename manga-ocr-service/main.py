@@ -80,6 +80,7 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
 
     try:
         ocr_text = (await run_in_threadpool(manga_ocr, image)).strip()
+        print(ocr_text)
     except Exception as exc:
         raise HTTPException(
             status_code=500,

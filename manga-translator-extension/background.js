@@ -1,8 +1,3 @@
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id) return;
-  await chrome.tabs.sendMessage(tab.id, { type: 'MANGA_TRANSLATOR_START_SELECT' });
-});
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type !== 'MANGA_TRANSLATOR_CAPTURE') return;
 
