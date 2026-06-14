@@ -10,8 +10,9 @@ MangaOCR 辨識日文，再透過 OpenAI Responses API 翻譯。
 1. 接收 Extension 傳來的 base64 圖片。
 2. 使用 Pillow 解碼並轉換為 RGB 圖片。
 3. 使用全域單例 MangaOCR 模型辨識日文。
-4. 將 OCR 文字交由 OpenAI 翻譯成台灣正體中文。
-5. 回傳 OCR 原文與翻譯結果。
+4. 將日文讀音轉換成羅馬拼音。
+5. 將 OCR 文字交由 OpenAI 翻譯成台灣正體中文。
+6. 回傳 OCR 原文、羅馬拼音與翻譯結果。
 
 ## 環境需求
 
@@ -105,6 +106,7 @@ Response：
 ```json
 {
   "ocrText": "辨識出的日文",
+  "romanizedText": "辨識文字的羅馬拼音",
   "translatedText": "翻譯後的台灣正體中文"
 }
 ```
@@ -114,6 +116,7 @@ Response：
 ```json
 {
   "ocrText": "",
+  "romanizedText": "",
   "translatedText": "看不清楚"
 }
 ```
@@ -133,6 +136,7 @@ curl -X POST http://localhost:8787/translate-image \
 ```json
 {
   "ocrText": "辨識出的日文",
+  "romanizedText": "辨識文字的羅馬拼音",
   "translatedText": "翻譯後的台灣正體中文"
 }
 ```

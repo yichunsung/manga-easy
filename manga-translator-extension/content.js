@@ -218,7 +218,17 @@ function showResult(rect, result) {
   el.style.left = `${Math.min(rect.left + rect.width + 8, window.innerWidth - 380)}px`;
   el.style.top = `${Math.max(12, rect.top)}px`;
 
+  const actions = document.createElement('div');
+  actions.className = 'manga-translator-result-actions';
+
+  const toggleRomanized = document.createElement('button');
+  toggleRomanized.className = 'manga-translator-romanized-toggle';
+  toggleRomanized.type = 'button';
+  toggleRomanized.textContent = '顯示羅馬拼音';
+
   const close = document.createElement('button');
+  close.className = 'manga-translator-result-close';
+  close.type = 'button';
   close.textContent = '×';
   close.onclick = () => el.remove();
 
@@ -231,6 +241,18 @@ function showResult(rect, result) {
     result.ocrText || '無辨識結果'
   )}`;
 
+  const romanizedText = document.createElement('div');
+  romanizedText.className =
+    'manga-translator-result-line manga-translator-result-romanized is-hidden';
+  romanizedText.textContent = result.romanizedText || '無羅馬拼音';
+
+  toggleRomanized.onclick = () => {
+    const hidden = romanizedText.classList.toggle('is-hidden');
+    toggleRomanized.textContent = hidden
+      ? '顯示羅馬拼音'
+      : '隱藏羅馬拼音';
+  };
+
   const translatedText = document.createElement('div');
   translatedText.className = 'manga-translator-result-line';
   translatedText.textContent = `${formatResultText(
@@ -238,9 +260,12 @@ function showResult(rect, result) {
   )}`;
 
   content.appendChild(originalText);
+  content.appendChild(romanizedText);
   content.appendChild(translatedText);
 
-  el.appendChild(close);
+  actions.appendChild(toggleRomanized);
+  actions.appendChild(close);
+  el.appendChild(actions);
   el.appendChild(content);
   document.body.appendChild(el);
   makeDraggable(el);

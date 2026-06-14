@@ -5,6 +5,9 @@ openai
 pillow
 numpy<2
 manga-ocr==0.1.14
+fugashi
+jaconv
+unidic_lite
 transformers==4.48.3
 torch==2.2.2
 torchvision==0.17.2

@@ -1,10 +1,13 @@
 import base64
 import binascii
 import os
+import re
 from datetime import datetime
 from io import BytesIO
 from typing import Any
 
+import fugashi
+import jaconv
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -27,6 +30,7 @@ app.add_middleware(
 
 # Loading MangaOCR is expensive, so keep one model instance for the process.
 manga_ocr = MangaOcr()
+japanese_tagger = fugashi.Tagger()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_client = (
     AsyncOpenAI(api_key=openai_api_key)
@@ -49,6 +53,27 @@ class TranslateImageRequest(BaseModel):
 def log(message: str) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}", flush=True)
+
+
+def romanize_japanese(text: str) -> str:
+    parts = []
+
+    for word in japanese_tagger(text):
+        reading = (
+            getattr(word.feature, "kana", None)
+            or getattr(word.feature, "pron", None)
+            or word.surface
+        )
+        parts.append(jaconv.kata2alphabet(reading))
+
+    romanized = " ".join(parts)
+    romanized = re.sub(
+        r"xtsu\s*([bcdfghjklmnpqrstvwxyz])",
+        lambda match: match.group(1) * 2,
+        romanized,
+        flags=re.IGNORECASE,
+    )
+    return romanized.replace("？", "?").replace("！", "!").strip()
 
 
 def decode_image(image_base64: str) -> Image.Image:
@@ -102,8 +127,11 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
     if not ocr_text:
         return {
             "ocrText": "",
+            "romanizedText": "",
             "translatedText": "看不清楚",
         }
+
+    romanized_text = romanize_japanese(ocr_text)
 
     if openai_client is None:
         raise HTTPException(
@@ -126,6 +154,7 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
 
     return {
         "ocrText": ocr_text,
+        "romanizedText": romanized_text,
         "translatedText": translated_text,
     }
 
