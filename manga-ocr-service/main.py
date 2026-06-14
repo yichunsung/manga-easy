@@ -1,6 +1,7 @@
 import base64
 import binascii
 import os
+from datetime import datetime
 from io import BytesIO
 from typing import Any
 
@@ -26,6 +27,12 @@ app.add_middleware(
 
 # Loading MangaOCR is expensive, so keep one model instance for the process.
 manga_ocr = MangaOcr()
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_client = (
+    AsyncOpenAI(api_key=openai_api_key)
+    if openai_api_key
+    else None
+)
 
 TRANSLATION_PROMPT = """你是日文漫畫翻譯助手。
 以下是從日本漫畫圖片 OCR 出來的日文文字。
@@ -37,6 +44,11 @@ TRANSLATION_PROMPT = """你是日文漫畫翻譯助手。
 
 class TranslateImageRequest(BaseModel):
     imageBase64: Any = None
+
+
+def log(message: str) -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}", flush=True)
 
 
 def decode_image(image_base64: str) -> Image.Image:
@@ -75,12 +87,12 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
             status_code=400,
             detail="imageBase64 is required and must be a non-empty string",
         )
-
+    log("Received image for translation")
     image = decode_image(payload.imageBase64.strip())
 
     try:
         ocr_text = (await run_in_threadpool(manga_ocr, image)).strip()
-        print(ocr_text)
+        log(f"OCR text extracted: {ocr_text}")
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -93,20 +105,19 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
             "translatedText": "看不清楚",
         }
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if openai_client is None:
         raise HTTPException(
             status_code=500,
             detail="OPENAI_API_KEY is not configured",
         )
 
     try:
-        client = AsyncOpenAI(api_key=api_key)
-        response = await client.responses.create(
+        response = await openai_client.responses.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
             input=f"{TRANSLATION_PROMPT}\n\nOCR 文字：\n{ocr_text}",
         )
         translated_text = response.output_text.strip()
+        log("Translation completed")
     except Exception as exc:
         raise HTTPException(
             status_code=500,
