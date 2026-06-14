@@ -1,0 +1,14 @@
+{
+  "name": "manga-translator-server",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "latest",
+    "dotenv": "latest",
+    "fastify": "latest",
+    "openai": "latest"
+  }
+}
