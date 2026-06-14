@@ -6,9 +6,9 @@
     "dev": "node server.js"
   },
   "dependencies": {
-    "@fastify/cors": "latest",
+    "cors": "latest",
     "dotenv": "latest",
-    "fastify": "latest",
+    "express": "latest",
     "openai": "latest"
   }
 }

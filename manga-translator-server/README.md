@@ -1,6 +1,6 @@
 # Manga Translator Server
 
-使用 Fastify 與 OpenAI Responses API 的替代後端。此版本不使用本機
+使用 Express 與 OpenAI Responses API 的替代後端。此版本不使用本機
 MangaOCR，而是直接將框選圖片交由 OpenAI 辨識日文並翻譯。
 
 目前主要後端為 `../manga-ocr-service`。兩者都預設使用 `8787`，請擇一啟動。
@@ -99,7 +99,7 @@ curl -X POST http://localhost:8787/translate-image \
 
 ```text
 manga-translator-server/
-├── server.js       # Fastify API 與 OpenAI 呼叫
+├── server.js       # Express API 與 OpenAI 呼叫
 ├── package.json    # npm scripts 與相依套件
 ├── .env.example    # 環境變數範例
 └── .gitignore

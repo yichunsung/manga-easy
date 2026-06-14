@@ -1,4 +1,4 @@
-# Manga Translator MVP
+# Manga Easy
 
 在 Chrome 網頁上框選日本漫畫文字區域，透過本機後端進行 OCR，並翻譯成
 台灣正體中文。
@@ -9,7 +9,7 @@
 manga-translator-mvp/
 ├── manga-translator-extension/  # Chrome Extension：框選、截圖、顯示翻譯
 ├── manga-ocr-service/           # FastAPI：MangaOCR + OpenAI 翻譯（主要後端）
-└── manga-translator-server/     # Fastify：OpenAI 圖片辨識與翻譯（替代後端）
+└── manga-translator-server/     # Express：OpenAI 圖片辨識與翻譯（替代後端）
 ```
 
 兩個後端都預設使用 `8787`，請擇一啟動，不要同時執行。
