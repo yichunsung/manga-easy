@@ -9,10 +9,11 @@
 manga-translator-mvp/
 ├── manga-translator-extension/  # Chrome Extension：框選、截圖、顯示翻譯
 ├── manga-ocr-service/           # FastAPI：MangaOCR + OpenAI 翻譯（主要後端）
-└── manga-translator-server/     # Express：OpenAI 圖片辨識與翻譯（替代後端）
+└── manga-translator-server/     # 舊 Express 後端（目前不修改）
 ```
 
-兩個後端都預設使用 `8787`，請擇一啟動，不要同時執行。
+Extension 請只搭配 `manga-ocr-service`。Extension 會檢查後端是否回報使用
+MangaOCR，不接受舊 Node.js 圖片直送後端的結果。
 
 ## 主要流程
 
@@ -35,7 +36,8 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-在 `.env` 設定 `OPENAI_API_KEY` 後啟動：
+可在 `.env` 設定 `OPENAI_API_KEY` 作為 fallback，或在 Extension Popup
+輸入使用者自己的 API Key。接著啟動：
 
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8787
@@ -70,17 +72,17 @@ curl http://localhost:8787/health
 - OpenAI API Key
 - 首次下載 MangaOCR 模型時需要網路連線
 
-Node.js 替代後端需要 Node.js 18 以上版本。
-
 ## 注意事項
 
-- `.env` 包含 API Key，不應提交到 Git。
+- `.env` 包含 API Key，不應提交到 Git。Popup 中的 API Key 儲存在
+  `chrome.storage.local`，不屬於加密儲存。
 - Extension 目前固定呼叫 `http://localhost:8787`。
 - OCR 準確度會受到圖片解析度、字體、文字方向及背景複雜度影響。
 - 本專案會將 OCR 後的文字送至 OpenAI 翻譯。
+- 所有模型都只能接收 MangaOCR 輸出的文字；原始圖片不會傳給 OpenAI。
 
 各元件的詳細說明請查看其資料夾內的 README。
 
 - [Chrome Extension](manga-translator-extension/README.md)
 - [Python OCR Service](manga-ocr-service/README.md)
-- [Node.js Translator Server](manga-translator-server/README.md)
+- [舊 Node.js Server](manga-translator-server/README.md)

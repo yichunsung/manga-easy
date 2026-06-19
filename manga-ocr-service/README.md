@@ -51,11 +51,12 @@ cp .env.example .env
 
 ```dotenv
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.4-mini
 ```
 
-`OPENAI_API_KEY` 必須設定。`OPENAI_MODEL` 未設定時會使用
-`gpt-4.1-mini`。
+`OPENAI_API_KEY` 可作為後端 fallback。Extension 也可在每次 request 傳入
+`apiKey` 與 `model`。`OPENAI_MODEL` 未設定時會使用
+`gpt-5.4-mini`。
 
 ## 啟動方式
 
@@ -97,7 +98,9 @@ Request：
 
 ```json
 {
-  "imageBase64": "data:image/png;base64,..."
+  "imageBase64": "data:image/png;base64,...",
+  "apiKey": "sk-...",
+  "model": "gpt-5.4-mini"
 }
 ```
 

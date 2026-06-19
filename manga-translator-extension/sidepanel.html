@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>漫畫翻譯側邊欄</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">MANGA TRANSLATOR</p>
+      <div class="heading">
+        <h1>翻譯紀錄</h1>
+        <button id="clear-history" class="clear-button" type="button">
+          清除全部
+        </button>
+      </div>
+      <p class="description">
+        完成框選翻譯後，原文與翻譯內容會自動儲存在這裡。
+      </p>
+
+      <p id="empty-state" class="empty-state">目前還沒有翻譯紀錄。</p>
+      <section id="history-list" class="history-list" aria-live="polite"></section>
+    </main>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

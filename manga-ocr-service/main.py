@@ -31,12 +31,26 @@ app.add_middleware(
 # Loading MangaOCR is expensive, so keep one model instance for the process.
 manga_ocr = MangaOcr()
 japanese_tagger = fugashi.Tagger()
-openai_api_key = os.getenv("OPENAI_API_KEY")
-openai_client = (
-    AsyncOpenAI(api_key=openai_api_key)
-    if openai_api_key
-    else None
-)
+ALLOWED_OPENAI_MODELS = {
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.2",
+    "gpt-5.1",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4",
+    "gpt-3.5-turbo",
+}
+CHAT_COMPLETIONS_MODELS = {"gpt-4", "gpt-3.5-turbo"}
+DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 
 TRANSLATION_PROMPT = """你是日文漫畫翻譯助手。
 以下是從日本漫畫圖片 OCR 出來的日文文字。
@@ -48,6 +62,8 @@ TRANSLATION_PROMPT = """你是日文漫畫翻譯助手。
 
 class TranslateImageRequest(BaseModel):
     imageBase64: Any = None
+    apiKey: Any = None
+    model: Any = None
 
 
 def log(message: str) -> None:
@@ -126,6 +142,7 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
 
     if not ocr_text:
         return {
+            "ocrEngine": "manga-ocr",
             "ocrText": "",
             "romanizedText": "",
             "translatedText": "看不清楚",
@@ -133,18 +150,45 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
 
     romanized_text = romanize_japanese(ocr_text)
 
-    if openai_client is None:
+    request_api_key = (
+        payload.apiKey.strip()
+        if isinstance(payload.apiKey, str)
+        else ""
+    )
+    api_key = request_api_key or os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
         raise HTTPException(
-            status_code=500,
-            detail="OPENAI_API_KEY is not configured",
+            status_code=400,
+            detail="OpenAI API Key is not configured",
         )
 
+    model = (
+        payload.model.strip()
+        if isinstance(payload.model, str) and payload.model.strip()
+        else os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+    )
+    if model not in ALLOWED_OPENAI_MODELS:
+        raise HTTPException(status_code=400, detail="Unsupported OpenAI model")
+    log(f"OpenAI model selected by user: {model}")
+
     try:
-        response = await openai_client.responses.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-            input=f"{TRANSLATION_PROMPT}\n\nOCR 文字：\n{ocr_text}",
-        )
-        translated_text = response.output_text.strip()
+        openai_client = AsyncOpenAI(api_key=api_key)
+        prompt = f"{TRANSLATION_PROMPT}\n\nOCR 文字：\n{ocr_text}"
+
+        if model in CHAT_COMPLETIONS_MODELS:
+            response = await openai_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            translated_text = (
+                response.choices[0].message.content or ""
+            ).strip()
+        else:
+            response = await openai_client.responses.create(
+                model=model,
+                input=prompt,
+            )
+            translated_text = response.output_text.strip()
         log("Translation completed")
     except Exception as exc:
         raise HTTPException(
@@ -153,6 +197,7 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
         ) from exc
 
     return {
+        "ocrEngine": "manga-ocr",
         "ocrText": ocr_text,
         "romanizedText": romanized_text,
         "translatedText": translated_text,

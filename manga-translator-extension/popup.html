@@ -7,21 +7,84 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <main>
-      <h1>漫畫翻譯</h1>
-      <button id="start-selection" type="button">
-        <span class="menu-number">1</span>
-        <span>框選翻譯</span>
-      </button>
-      <button id="clear-results" type="button">
-        <span class="menu-number">2</span>
-        <span>一鍵清除所有翻譯結果</span>
-      </button>
-      <button id="toggle-floating-button" type="button">
-        <span class="menu-number">3</span>
-        <span id="floating-button-label">啟用常駐框選按鈕</span>
-      </button>
-      <p id="status" role="status"></p>
+    <main id="menu-view">
+      <div class="title-row">
+        <h1>漫畫翻譯</h1>
+        <button id="open-settings" class="icon-button" type="button" aria-label="開啟設定">
+          設定
+        </button>
+      </div>
+      <div class="menu-actions">
+        <button id="start-selection" type="button">
+          <span class="menu-number">1</span>
+          <span>框選翻譯</span>
+        </button>
+        <button id="clear-results" type="button">
+          <span class="menu-number">2</span>
+          <span>一鍵清除所有翻譯結果</span>
+        </button>
+        <button id="toggle-floating-button" type="button">
+          <span class="menu-number">3</span>
+          <span id="floating-button-label">啟用常駐框選按鈕</span>
+        </button>
+        <button id="open-side-panel" type="button" disabled>
+          <span class="menu-number">4</span>
+          <span>展開側邊欄</span>
+        </button>
+      </div>
+      <p id="menu-status" class="status" role="status"></p>
+      <p class="footer">© 2026 漫畫翻譯擴充功能</p>
+    </main>
+
+    <main id="settings-view" hidden>
+      <div class="title-row">
+        <h1>OpenAI 設定</h1>
+        <button id="close-settings" class="icon-button" type="button">
+          返回
+        </button>
+      </div>
+
+      <form id="settings-form">
+        <label for="openai-api-key">API Key</label>
+        <input
+          id="openai-api-key"
+          name="openaiApiKey"
+          type="password"
+          placeholder="sk-..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <p class="field-help">儲存在這台瀏覽器的 chrome.storage.local，內容不會加密。</p>
+
+        <label for="openai-model">模型</label>
+        <select id="openai-model" name="openaiModel">
+          <option value="gpt-5.5">GPT-5.5（品質優先）</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="gpt-5.4-mini">GPT-5.4 mini（建議）</option>
+          <option value="gpt-5.4-nano">GPT-5.4 nano（速度與成本優先）</option>
+          <option value="gpt-5.2">GPT-5.2</option>
+          <option value="gpt-5.1">GPT-5.1</option>
+          <option value="gpt-5">GPT-5</option>
+          <option value="gpt-5-mini">GPT-5 mini</option>
+          <option value="gpt-5-nano">GPT-5 nano</option>
+          <option value="gpt-4.1">GPT-4.1</option>
+          <option value="gpt-4.1-mini">GPT-4.1 mini</option>
+          <option value="gpt-4.1-nano">GPT-4.1 nano</option>
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="gpt-4o-mini">GPT-4o mini</option>
+          <option value="gpt-4">GPT-4（舊版、文字模型）</option>
+          <option value="gpt-3.5-turbo">GPT-3.5 Turbo（舊版、文字模型）</option>
+        </select>
+        <!-- <p class="field-help">
+          所有模型都只接收 MangaOCR 辨識後的文字，不會直接接收圖片。
+        </p> -->
+
+        <button class="primary-button" type="submit">儲存設定</button>
+        <button id="clear-api-key" class="danger-button" type="button">
+          清除 API Key
+        </button>
+      </form>
+      <p id="settings-status" class="status" role="status"></p>
     </main>
     <script src="popup.js"></script>
   </body>

@@ -1,4 +1,9 @@
 const API_URL = 'http://localhost:8787/translate-image';
+const TRANSLATION_HISTORY_KEY = 'translationHistory';
+const MAX_TRANSLATION_HISTORY = 100;
+const OPENAI_API_KEY_STORAGE_KEY = 'openaiApiKey';
+const OPENAI_MODEL_STORAGE_KEY = 'openaiModel';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
 
 let selecting = false;
 let startX = 0;
@@ -142,6 +147,7 @@ async function onMouseUp(e) {
   }
 
   showResult(rect, result);
+  await saveTranslationHistory(result);
 }
 
 function updateBox(x1, y1, x2, y2) {
@@ -202,14 +208,66 @@ function loadImage(src) {
 }
 
 async function translateImage(imageBase64) {
+  const settings = await chrome.storage.local.get([
+    OPENAI_API_KEY_STORAGE_KEY,
+    OPENAI_MODEL_STORAGE_KEY
+  ]);
+  const apiKey = String(settings[OPENAI_API_KEY_STORAGE_KEY] || '').trim();
+  const model = settings[OPENAI_MODEL_STORAGE_KEY] || DEFAULT_OPENAI_MODEL;
+
+  if (!apiKey) {
+    throw new Error('請先在擴充功能 Popup 的設定頁輸入 OpenAI API Key');
+  }
+
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64 })
+    body: JSON.stringify({ imageBase64, apiKey, model })
   });
 
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    throw new Error(errorBody?.detail || errorBody?.error || `API ${res.status}`);
+  }
+  const result = await res.json();
+  if (result.ocrEngine !== 'manga-ocr') {
+    throw new Error('後端未使用 MangaOCR，已拒絕此翻譯結果');
+  }
+  return result;
+}
+
+async function saveTranslationHistory(result) {
+  const originalText = String(result.ocrText || '').trim();
+  const translatedText = String(result.translatedText || result.text || '').trim();
+
+  if (!originalText || !translatedText || translatedText.startsWith('失敗：')) {
+    return;
+  }
+
+  try {
+    const stored = await chrome.storage.local.get(TRANSLATION_HISTORY_KEY);
+    const history = Array.isArray(stored[TRANSLATION_HISTORY_KEY])
+      ? stored[TRANSLATION_HISTORY_KEY]
+      : [];
+
+    const item = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      originalText,
+      translatedText,
+      createdAt: new Date().toISOString(),
+      pageTitle: document.title,
+      pageUrl: location.href
+    };
+
+    await chrome.storage.local.set({
+      [TRANSLATION_HISTORY_KEY]: [item, ...history].slice(
+        0,
+        MAX_TRANSLATION_HISTORY
+      )
+    });
+  } catch (error) {
+    console.error('無法儲存翻譯紀錄', error);
+  }
 }
 
 function showResult(rect, result) {

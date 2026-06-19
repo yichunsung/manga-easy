@@ -8,7 +8,7 @@
 }
 
 body {
-  width: 280px;
+  width: 320px;
   margin: 0;
   background: #171717;
   color: #fff;
@@ -19,12 +19,22 @@ main {
 }
 
 h1 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 17px;
   font-weight: 700;
 }
 
-button {
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.menu-actions button,
+.primary-button,
+.danger-button {
   display: flex;
   align-items: center;
   width: 100%;
@@ -39,14 +49,23 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+.menu-actions button:hover,
+.primary-button:hover,
+.danger-button:hover {
   border-color: #00a3ff;
   background: #303030;
 }
 
-button:focus-visible {
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
   outline: 2px solid #00a3ff;
   outline-offset: 2px;
+}
+
+.menu-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .menu-number {
@@ -62,10 +81,77 @@ button:focus-visible {
   font-weight: 700;
 }
 
-#status {
+.icon-button {
+  padding: 6px 9px;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background: #252525;
+  color: #d8d8d8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+form {
+  display: grid;
+}
+
+label {
+  margin: 10px 0 6px;
+  color: #d8d8d8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid #3a3a3a;
+  border-radius: 9px;
+  background: #252525;
+  color: #fff;
+  font: inherit;
+}
+
+.field-help {
+  margin: 6px 1px 4px;
+  color: #909090;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.primary-button,
+.danger-button {
+  justify-content: center;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.primary-button {
+  border-color: #008bd9;
+  background: #007fc5;
+}
+
+.danger-button {
+  margin-top: 8px;
+  color: #ffb4b4;
+}
+
+.status {
   min-height: 18px;
   margin: 10px 2px 0;
-  color: #ffb4b4;
+  color: #8bd4ff;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.footer {
+  margin: 8px 2px 0;
+  color: #777;
+  font-size: 11px;
+}
+
+[hidden] {
+  display: none !important;
 }

@@ -4,7 +4,24 @@ import express from 'express';
 import OpenAI from 'openai';
 
 const app = express();
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const allowedModels = new Set([
+  'gpt-5.5',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+  'gpt-5.2',
+  'gpt-5.1',
+  'gpt-5',
+  'gpt-5-mini',
+  'gpt-5-nano',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'gpt-4o',
+  'gpt-4o-mini'
+]);
+const textOnlyModels = new Set(['gpt-4', 'gpt-3.5-turbo']);
+const defaultModel = 'gpt-5.4-mini';
 
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
@@ -14,15 +31,32 @@ app.get('/health', (_request, response) => {
 });
 
 app.post('/translate-image', async (request, response, next) => {
-  const { imageBase64 } = request.body || {};
+  const { imageBase64, apiKey, model = defaultModel } = request.body || {};
 
   if (!imageBase64 || typeof imageBase64 !== 'string') {
     return response.status(400).json({ error: 'imageBase64 is required' });
   }
 
+  const resolvedApiKey =
+    (typeof apiKey === 'string' && apiKey.trim()) ||
+    process.env.OPENAI_API_KEY?.trim();
+  if (!resolvedApiKey) {
+    return response.status(400).json({ error: 'OpenAI API Key is required' });
+  }
+
+  if (!allowedModels.has(model)) {
+    if (textOnlyModels.has(model)) {
+      return response.status(400).json({
+        error: `${model} 不支援圖片輸入，請改用 manga-ocr-service Python 後端`
+      });
+    }
+    return response.status(400).json({ error: 'Unsupported OpenAI model' });
+  }
+
   try {
+    const openai = new OpenAI({ apiKey: resolvedApiKey });
     const openaiResponse = await openai.responses.create({
-      model: 'gpt-4.1-mini',
+      model,
       input: [
         {
           role: 'user',

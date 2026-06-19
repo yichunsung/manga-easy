@@ -65,7 +65,9 @@ Request：
 
 ```json
 {
-  "imageBase64": "data:image/png;base64,..."
+  "imageBase64": "data:image/png;base64,...",
+  "apiKey": "sk-...",
+  "model": "gpt-5.4-mini"
 }
 ```
 
