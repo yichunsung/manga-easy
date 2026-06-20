@@ -25,6 +25,8 @@ client_secret.json
 # compiled output
 /dist
 /node_modules
+*/node_modules
+/node_modules/*
 /build
 
 # Logs
