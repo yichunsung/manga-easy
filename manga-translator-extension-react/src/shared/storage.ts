@@ -1,5 +1,7 @@
 import {
   OPENAI_MODELS,
+  type DictionaryFile,
+  type DictionaryState,
   type ExtensionSettings,
   type TranslationHistoryItem
 } from './types';
@@ -8,6 +10,12 @@ const API_KEY_KEY = 'openaiApiKey';
 const MODEL_KEY = 'openaiModel';
 const HISTORY_KEY = 'translationHistory';
 const FLOATING_BUTTON_KEY = 'floatingButtonEnabled';
+const DICTIONARY_FILES_KEY = 'dictionaryFiles';
+const ACTIVE_DICTIONARY_KEY = 'activeDictionaryId';
+const CONTEXT_TRANSLATION_KEY = 'contextTranslationEnabled';
+
+export const MAX_DICTIONARY_FILES = 6;
+export const MAX_DICTIONARY_ENTRIES = 50;
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   openaiApiKey: '',
@@ -60,6 +68,16 @@ export async function clearTranslationHistory(): Promise<void> {
   await chrome.storage.local.remove(HISTORY_KEY);
 }
 
+export async function deleteTranslationHistoryItem(
+  itemId: string
+): Promise<void> {
+  ensureChromeStorage();
+  const history = await getTranslationHistory();
+  await chrome.storage.local.set({
+    [HISTORY_KEY]: history.filter((item) => item.id !== itemId)
+  });
+}
+
 export async function getFloatingButtonEnabled(): Promise<boolean> {
   ensureChromeStorage();
   const result = await chrome.storage.local.get(FLOATING_BUTTON_KEY);
@@ -69,6 +87,19 @@ export async function getFloatingButtonEnabled(): Promise<boolean> {
 export async function setFloatingButtonEnabled(enabled: boolean): Promise<void> {
   ensureChromeStorage();
   await chrome.storage.local.set({ [FLOATING_BUTTON_KEY]: enabled });
+}
+
+export async function getContextTranslationEnabled(): Promise<boolean> {
+  ensureChromeStorage();
+  const result = await chrome.storage.local.get(CONTEXT_TRANSLATION_KEY);
+  return Boolean(result[CONTEXT_TRANSLATION_KEY]);
+}
+
+export async function setContextTranslationEnabled(
+  enabled: boolean
+): Promise<void> {
+  ensureChromeStorage();
+  await chrome.storage.local.set({ [CONTEXT_TRANSLATION_KEY]: enabled });
 }
 
 export function subscribeToTranslationHistory(
@@ -85,4 +116,129 @@ export function subscribeToTranslationHistory(
 
   chrome.storage.onChanged.addListener(handleChange);
   return () => chrome.storage.onChanged.removeListener(handleChange);
+}
+
+export async function getDictionaryState(): Promise<DictionaryState> {
+  ensureChromeStorage();
+  const result = await chrome.storage.local.get([
+    DICTIONARY_FILES_KEY,
+    ACTIVE_DICTIONARY_KEY
+  ]);
+  const files = normalizeDictionaryFiles(result[DICTIONARY_FILES_KEY]);
+  const storedActiveId =
+    typeof result[ACTIVE_DICTIONARY_KEY] === 'string'
+      ? result[ACTIVE_DICTIONARY_KEY]
+      : null;
+
+  return {
+    files,
+    activeDictionaryId: files.some((file) => file.id === storedActiveId)
+      ? storedActiveId
+      : null
+  };
+}
+
+export async function saveDictionaryFiles(
+  files: DictionaryFile[]
+): Promise<void> {
+  ensureChromeStorage();
+  if (files.length > MAX_DICTIONARY_FILES) {
+    throw new Error(`字典檔最多 ${MAX_DICTIONARY_FILES} 個。`);
+  }
+
+  const normalized = files.map((file) => {
+    if (!file.title.trim()) throw new Error('字典檔標題不可空白。');
+    if (file.entries.length > MAX_DICTIONARY_ENTRIES) {
+      throw new Error(
+        `每個字典檔最多 ${MAX_DICTIONARY_ENTRIES} 筆詞條。`
+      );
+    }
+    return {
+      ...file,
+      title: file.title.trim(),
+      entries: file.entries.map((entry) => ({
+        ...entry,
+        origin: entry.origin.trim(),
+        value: entry.value.trim(),
+        type: entry.type.trim(),
+        note: entry.note.trim()
+      }))
+    };
+  });
+
+  await chrome.storage.local.set({ [DICTIONARY_FILES_KEY]: normalized });
+}
+
+export async function setActiveDictionaryId(
+  dictionaryId: string | null
+): Promise<void> {
+  ensureChromeStorage();
+  const { files } = await getDictionaryState();
+  if (
+    dictionaryId !== null &&
+    !files.some((dictionary) => dictionary.id === dictionaryId)
+  ) {
+    throw new Error('找不到要啟用的字典檔。');
+  }
+  await chrome.storage.local.set({ [ACTIVE_DICTIONARY_KEY]: dictionaryId });
+}
+
+export function subscribeToDictionaryState(
+  listener: (state: DictionaryState) => void
+) {
+  const handleChange = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    areaName: string
+  ) => {
+    if (
+      areaName !== 'local' ||
+      (!changes[DICTIONARY_FILES_KEY] && !changes[ACTIVE_DICTIONARY_KEY])
+    ) {
+      return;
+    }
+    void getDictionaryState().then(listener);
+  };
+
+  chrome.storage.onChanged.addListener(handleChange);
+  return () => chrome.storage.onChanged.removeListener(handleChange);
+}
+
+function normalizeDictionaryFiles(value: unknown): DictionaryFile[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(
+      (file): file is Record<string, unknown> =>
+        typeof file === 'object' && file !== null
+    )
+    .slice(0, MAX_DICTIONARY_FILES)
+    .map((file) => {
+      const now = new Date().toISOString();
+      const entries = Array.isArray(file.entries)
+        ? file.entries
+            .filter(
+              (entry): entry is Record<string, unknown> =>
+                typeof entry === 'object' && entry !== null
+            )
+            .slice(0, MAX_DICTIONARY_ENTRIES)
+            .map((entry) => ({
+              id:
+                typeof entry.id === 'string'
+                  ? entry.id
+                  : crypto.randomUUID(),
+              origin: String(entry.origin || ''),
+              value: String(entry.value || ''),
+              type: String(entry.type || ''),
+              note: String(entry.note || '')
+            }))
+        : [];
+
+      return {
+        id: typeof file.id === 'string' ? file.id : crypto.randomUUID(),
+        title: String(file.title || '未命名字典'),
+        entries,
+        createdAt: typeof file.createdAt === 'string' ? file.createdAt : now,
+        updatedAt: typeof file.updatedAt === 'string' ? file.updatedAt : now
+      };
+    });
 }

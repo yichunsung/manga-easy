@@ -52,18 +52,20 @@ ALLOWED_OPENAI_MODELS = {
 CHAT_COMPLETIONS_MODELS = {"gpt-4", "gpt-3.5-turbo"}
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 
-TRANSLATION_PROMPT = """你是日文漫畫翻譯助手。
-以下是從日本漫畫圖片 OCR 出來的日文文字。
+SYSTEM_PROMPT = """你是專業日文漫畫翻譯助手。
 請翻譯成台灣正體中文。
-翻譯要自然、符合漫畫台詞語氣。
-如果 OCR 文字明顯破碎或無法理解，請明確說「看不清楚」。
-只輸出翻譯後的中文，不要解釋。"""
+必須遵守使用者提供的漫畫字典。
+不要輸出說明、註解或額外文字。"""
 
 
 class TranslateImageRequest(BaseModel):
     imageBase64: Any = None
     apiKey: Any = None
     model: Any = None
+    dictionaryTitle: Any = None
+    dictionaryEntries: Any = None
+    contextTranslationEnabled: Any = False
+    translationContext: Any = None
 
 
 def log(message: str) -> None:
@@ -114,6 +116,92 @@ def decode_image(image_base64: str) -> Image.Image:
             return image.convert("RGB")
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Invalid image data") from exc
+
+
+def get_matching_dictionary_lines(
+    dictionary_entries: Any,
+    ocr_text: str,
+) -> list[str]:
+    if not isinstance(dictionary_entries, list):
+        return []
+
+    matched_lines = []
+    seen_origins = set()
+
+    for entry in dictionary_entries[:50]:
+        if not isinstance(entry, dict):
+            continue
+
+        origin = str(entry.get("origin") or "").strip()
+        value = str(entry.get("value") or "").strip()
+        if (
+            not origin
+            or not value
+            or origin in seen_origins
+            or origin not in ocr_text
+        ):
+            continue
+
+        seen_origins.add(origin)
+        matched_lines.append(f"{origin} => {value}")
+        log(f"Dictionary hit: {origin} => {value}")
+
+    return matched_lines
+
+
+def build_user_prompt(
+    ocr_text: str,
+    dictionary_lines: list[str],
+    context_originals: list[str],
+    context_translations: list[str],
+) -> str:
+    glossary_text = "\n".join(dictionary_lines) if dictionary_lines else "無"
+    context_text = ""
+    if context_originals and context_translations:
+        context_text = f"""
+
+【前文原文】
+{chr(10).join(context_originals)}
+
+【前文翻譯】
+{chr(10).join(context_translations)}
+"""
+
+    return f"""【漫畫字典】
+{glossary_text}
+{context_text}
+
+【翻譯規則】
+1. 漫畫字典是固定譯名，優先級最高。
+2. 角色名、地名、組織名、招式名必須照字典翻譯。
+3. 沒有出現在字典中的詞，請依上下文自然翻譯。
+4. 保留漫畫對話的簡短、自然語氣。
+5. 只輸出正體中文翻譯。
+
+【待翻譯日文】
+{ocr_text}"""
+
+
+def get_translation_context(
+    enabled: Any,
+    translation_context: Any,
+) -> tuple[list[str], list[str]]:
+    if enabled is not True or not isinstance(translation_context, list):
+        return [], []
+
+    originals = []
+    translations = []
+    for item in translation_context[-5:]:
+        if not isinstance(item, dict):
+            continue
+        original_text = str(item.get("originalText") or "").strip()
+        translated_text = str(item.get("translatedText") or "").strip()
+        if not original_text or not translated_text:
+            continue
+        originals.append(original_text)
+        translations.append(translated_text)
+
+    return originals, translations
 
 
 @app.get("/health")
@@ -173,12 +261,38 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
 
     try:
         openai_client = AsyncOpenAI(api_key=api_key)
-        prompt = f"{TRANSLATION_PROMPT}\n\nOCR 文字：\n{ocr_text}"
+        dictionary_lines = get_matching_dictionary_lines(
+            payload.dictionaryEntries,
+            ocr_text,
+        )
+        dictionary_title = str(payload.dictionaryTitle or "使用者字典").strip()
+        log(
+            f"Dictionary matching: {dictionary_title} "
+            f"({len(dictionary_lines)} hits)"
+        )
+        context_originals, context_translations = get_translation_context(
+            payload.contextTranslationEnabled,
+            payload.translationContext,
+        )
+        if context_originals:
+            log(f"Applying translation context: {len(context_originals)} items")
+        else:
+            log("Translation context disabled or empty")
+
+        user_prompt = build_user_prompt(
+            ocr_text,
+            dictionary_lines,
+            context_originals,
+            context_translations,
+        )
 
         if model in CHAT_COMPLETIONS_MODELS:
             response = await openai_client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
             )
             translated_text = (
                 response.choices[0].message.content or ""
@@ -186,7 +300,8 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
         else:
             response = await openai_client.responses.create(
                 model=model,
-                input=prompt,
+                instructions=SYSTEM_PROMPT,
+                input=user_prompt,
             )
             translated_text = response.output_text.strip()
         log("Translation completed")

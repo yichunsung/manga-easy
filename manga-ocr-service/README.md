@@ -100,9 +100,21 @@ Request：
 {
   "imageBase64": "data:image/png;base64,...",
   "apiKey": "sk-...",
-  "model": "gpt-5.4-mini"
+  "model": "gpt-5.4-mini",
+  "dictionaryTitle": "角色名稱",
+  "dictionaryEntries": [
+    {
+      "origin": "ミカ",
+      "value": "米卡",
+      "type": "character",
+      "note": "角色名"
+    }
+  ]
 }
 ```
+
+後端會先以 MangaOCR 取得日文文字，再檢查 OCR 文字是否包含字典的 `origin`。
+只有實際命中的詞條會加入翻譯 prompt，未命中的詞條不會送給 OpenAI。
 
 Response：
 

@@ -46,3 +46,29 @@ export interface TranslationResult {
   translatedText?: string;
   text?: string;
 }
+
+export interface DictionaryEntry {
+  id: string;
+  origin: string;
+  value: string;
+  type: string;
+  note: string;
+}
+
+export interface DictionaryFile {
+  id: string;
+  title: string;
+  entries: DictionaryEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DictionaryState {
+  files: DictionaryFile[];
+  activeDictionaryId: string | null;
+}
+
+export interface TranslationContextItem {
+  originalText: string;
+  translatedText: string;
+}

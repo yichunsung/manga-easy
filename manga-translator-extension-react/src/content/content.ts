@@ -11,6 +11,9 @@ const MAX_HISTORY = 100;
 const API_KEY_KEY = 'openaiApiKey';
 const MODEL_KEY = 'openaiModel';
 const DEFAULT_MODEL = 'gpt-5.4-mini';
+const DICTIONARY_FILES_KEY = 'dictionaryFiles';
+const ACTIVE_DICTIONARY_KEY = 'activeDictionaryId';
+const CONTEXT_TRANSLATION_KEY = 'contextTranslationEnabled';
 
 interface SelectionRect {
   left: number;
@@ -243,18 +246,82 @@ function loadImage(src: string) {
 }
 
 async function translateImage(imageBase64: string): Promise<TranslationResult> {
-  const settings = await chrome.storage.local.get([API_KEY_KEY, MODEL_KEY]);
+  const settings = await chrome.storage.local.get([
+    API_KEY_KEY,
+    MODEL_KEY,
+    DICTIONARY_FILES_KEY,
+    ACTIVE_DICTIONARY_KEY,
+    CONTEXT_TRANSLATION_KEY,
+    HISTORY_KEY
+  ]);
   const apiKey = String(settings[API_KEY_KEY] || '').trim();
   const model = String(settings[MODEL_KEY] || DEFAULT_MODEL);
+  const activeDictionaryId = settings[ACTIVE_DICTIONARY_KEY];
+  const dictionaryFiles = Array.isArray(settings[DICTIONARY_FILES_KEY])
+    ? settings[DICTIONARY_FILES_KEY]
+    : [];
+  const activeDictionary = dictionaryFiles.find(
+    (dictionary: { id?: unknown }) => dictionary?.id === activeDictionaryId
+  );
+  const dictionaryEntries = Array.isArray(activeDictionary?.entries)
+    ? activeDictionary.entries.slice(0, 50).map(
+        (entry: {
+          origin?: unknown;
+          value?: unknown;
+          type?: unknown;
+          note?: unknown;
+        }) => ({
+          origin: String(entry.origin || ''),
+          value: String(entry.value || ''),
+          type: String(entry.type || ''),
+          note: String(entry.note || '')
+        })
+      )
+    : [];
+  const contextTranslationEnabled = Boolean(
+    settings[CONTEXT_TRANSLATION_KEY]
+  );
+  const translationContext = contextTranslationEnabled &&
+    Array.isArray(settings[HISTORY_KEY])
+    ? settings[HISTORY_KEY]
+        .slice(0, 5)
+        .reverse()
+        .map(
+          (item: {
+            originalText?: unknown;
+            translatedText?: unknown;
+          }) => ({
+            originalText: String(item.originalText || ''),
+            translatedText: String(item.translatedText || '')
+          })
+        )
+        .filter(
+          (item: { originalText: string; translatedText: string }) =>
+            item.originalText && item.translatedText
+        )
+    : [];
 
   if (!apiKey) {
     throw new Error('請先在擴充功能 Popup 的設定頁輸入 OpenAI API Key');
   }
 
+  const requestBody: Record<string, unknown> = {
+    imageBase64,
+    apiKey,
+    model,
+    dictionaryTitle: String(activeDictionary?.title || ''),
+    dictionaryEntries
+  };
+
+  if (contextTranslationEnabled) {
+    requestBody.contextTranslationEnabled = true;
+    requestBody.translationContext = translationContext;
+  }
+
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64, apiKey, model })
+    body: JSON.stringify(requestBody)
   });
 
   if (!response.ok) {
