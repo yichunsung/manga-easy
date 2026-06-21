@@ -7,11 +7,13 @@ import {
   saveSettings,
   setFloatingButtonEnabled
 } from '../shared/storage';
+import { getMessages, LANGUAGE_OPTIONS } from '../shared/i18n';
 import {
   OPENAI_MODELS,
   type ExtensionSettings,
   type MangaTranslatorMessage,
-  type OpenAiModel
+  type OpenAiModel,
+  type UiLanguage
 } from '../shared/types';
 
 const MODEL_LABELS: Partial<Record<OpenAiModel, string>> = {
@@ -30,9 +32,11 @@ export function PopupApp() {
   const [currentWindowId, setCurrentWindowId] = useState<number>();
   const [menuStatus, setMenuStatus] = useState('');
   const [settingsStatus, setSettingsStatus] = useState('');
+  const messages = getMessages(settings.uiLanguage);
 
   useEffect(() => {
     void Promise.all([
+      getSettings().then(setSettings),
       getFloatingButtonEnabled().then(setFloatingEnabled),
       chrome.windows.getCurrent().then((window) => {
         setCurrentWindowId(window.id);
@@ -52,7 +56,7 @@ export function PopupApp() {
       window.close();
     } catch (error) {
       console.error(error);
-      setMenuStatus('此頁面無法使用，請重新整理一般網頁後再試。');
+      setMenuStatus(messages.pageUnavailable);
     }
   }
 
@@ -68,7 +72,7 @@ export function PopupApp() {
       });
     } catch (error) {
       console.error(error);
-      setMenuStatus('無法切換常駐按鈕，請重新整理一般網頁後再試。');
+      setMenuStatus(messages.pageUnavailable);
     }
   }
 
@@ -82,7 +86,7 @@ export function PopupApp() {
       window.close();
     } catch (error) {
       console.error(error);
-      setMenuStatus('無法開啟側邊欄，請確認 Chrome 已更新至支援版本。');
+      setMenuStatus(messages.sidePanelError);
     }
   }
 
@@ -102,36 +106,36 @@ export function PopupApp() {
     const apiKey = settings.openaiApiKey.trim();
 
     if (!apiKey) {
-      setSettingsStatus('請輸入 OpenAI API Key。');
+      setSettingsStatus(messages.enterApiKey);
       return;
     }
 
     await saveSettings({ ...settings, openaiApiKey: apiKey });
-    setSettingsStatus('設定已儲存。');
+    setSettingsStatus(messages.settingsSaved);
   }
 
   async function handleClearApiKey() {
     await clearApiKey();
     setSettings((current) => ({ ...current, openaiApiKey: '' }));
-    setSettingsStatus('API Key 已清除。');
+    setSettingsStatus(messages.apiKeyCleared);
   }
 
   if (view === 'settings') {
     return (
       <main className="popup-shell">
         <div className="title-row">
-          <h1>OpenAI 設定</h1>
+          <h1>{messages.openAiSettings}</h1>
           <button
             className="icon-button"
             type="button"
             onClick={() => setView('menu')}
           >
-            返回
+            {messages.back}
           </button>
         </div>
 
         <form className="settings-form" onSubmit={handleSubmit}>
-          <label htmlFor="api-key">API Key</label>
+          <label htmlFor="api-key">{messages.apiKey}</label>
           <input
             id="api-key"
             type="password"
@@ -148,10 +152,10 @@ export function PopupApp() {
             }
           />
           <p className="field-help">
-            儲存在這台瀏覽器的 chrome.storage.local，內容不會加密。
+            {messages.apiKeyHelp}
           </p>
 
-          <label htmlFor="model">模型</label>
+          <label htmlFor="model">{messages.model}</label>
           <select
             id="model"
             value={settings.openaiModel}
@@ -169,15 +173,35 @@ export function PopupApp() {
             ))}
           </select>
 
+          <label htmlFor="ui-language">{messages.language}</label>
+          <select
+            id="ui-language"
+            value={settings.uiLanguage}
+            onChange={(event) => {
+              const uiLanguage = event.target.value as UiLanguage;
+              setSettings((current) => ({
+                ...current,
+                uiLanguage
+              }));
+              void chrome.storage.local.set({ uiLanguage });
+            }}
+          >
+            {LANGUAGE_OPTIONS.map((language) => (
+              <option key={language.value} value={language.value}>
+                {language.label}
+              </option>
+            ))}
+          </select>
+
           <button className="primary-button" type="submit">
-            儲存設定
+            {messages.saveSettings}
           </button>
           <button
             className="danger-button"
             type="button"
             onClick={handleClearApiKey}
           >
-            清除 API Key
+            {messages.clearApiKey}
           </button>
         </form>
         <p className="status" role="status">{settingsStatus}</p>
@@ -188,14 +212,14 @@ export function PopupApp() {
   return (
     <main className="popup-shell">
       <div className="title-row">
-        <h1>漫畫翻譯</h1>
+        <h1>{messages.appTitle}</h1>
         <button
           className="icon-button"
           type="button"
           aria-label="開啟設定"
           onClick={handleOpenSettings}
         >
-          設定
+          {messages.settings}
         </button>
       </div>
 
@@ -207,7 +231,7 @@ export function PopupApp() {
           }
         >
           <span className="menu-number">1</span>
-          <span>框選翻譯</span>
+          <span>{messages.startSelection}</span>
         </button>
         <button
           type="button"
@@ -216,14 +240,14 @@ export function PopupApp() {
           }
         >
           <span className="menu-number">2</span>
-          <span>一鍵清除所有翻譯結果</span>
+          <span>{messages.clearResults}</span>
         </button>
         <button type="button" onClick={handleToggleFloatingButton}>
           <span className="menu-number">3</span>
           <span>
             {floatingButtonEnabled
-              ? '關閉常駐框選按鈕'
-              : '啟用常駐框選按鈕'}
+              ? messages.disableFloating
+              : messages.enableFloating}
           </span>
         </button>
         <button
@@ -232,7 +256,7 @@ export function PopupApp() {
           onClick={handleOpenSidePanel}
         >
           <span className="menu-number">4</span>
-          <span>展開側邊欄</span>
+          <span>{messages.openSidePanel}</span>
         </button>
       </div>
 

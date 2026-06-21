@@ -1,7 +1,8 @@
 import type {
   MangaTranslatorMessage,
   TranslationHistoryItem,
-  TranslationResult
+  TranslationResult,
+  UiLanguage
 } from '../shared/types';
 import './content.css';
 
@@ -14,6 +15,64 @@ const DEFAULT_MODEL = 'gpt-5.4-mini';
 const DICTIONARY_FILES_KEY = 'dictionaryFiles';
 const ACTIVE_DICTIONARY_KEY = 'activeDictionaryId';
 const CONTEXT_TRANSLATION_KEY = 'contextTranslationEnabled';
+const UI_LANGUAGE_KEY = 'uiLanguage';
+
+let uiLanguage: UiLanguage = 'zh-TW';
+
+const contentMessages = {
+  'zh-TW': {
+    floatingButton: '框選翻譯',
+    startSelection: '框選翻譯',
+    selectArea: '請拖曳框選漫畫文字區域',
+    areaTooSmall: '框選範圍太小',
+    translating: '辨識與翻譯中...',
+    showRomanized: '顯示羅馬拼音',
+    hideRomanized: '隱藏羅馬拼音',
+    noOcr: '無辨識結果',
+    noRomanized: '無羅馬拼音',
+    noTranslation: '沒有翻譯結果'
+  },
+  'zh-CN': {
+    floatingButton: '框选翻译',
+    startSelection: '框选翻译',
+    selectArea: '请拖动框选漫画文字区域',
+    areaTooSmall: '框选范围太小',
+    translating: '识别与翻译中...',
+    showRomanized: '显示罗马拼音',
+    hideRomanized: '隐藏罗马拼音',
+    noOcr: '无识别结果',
+    noRomanized: '无罗马拼音',
+    noTranslation: '没有翻译结果'
+  },
+  en: {
+    floatingButton: 'Select and translate',
+    startSelection: 'Select and translate',
+    selectArea: 'Drag to select manga text',
+    areaTooSmall: 'Selection is too small',
+    translating: 'Recognizing and translating...',
+    showRomanized: 'Show romanization',
+    hideRomanized: 'Hide romanization',
+    noOcr: 'No OCR result',
+    noRomanized: 'No romanization',
+    noTranslation: 'No translation result'
+  },
+  ko: {
+    floatingButton: '영역 선택 번역',
+    startSelection: '영역 선택 번역',
+    selectArea: '만화 텍스트 영역을 드래그하세요',
+    areaTooSmall: '선택 영역이 너무 작습니다',
+    translating: '인식 및 번역 중...',
+    showRomanized: '로마자 표시',
+    hideRomanized: '로마자 숨기기',
+    noOcr: '인식 결과 없음',
+    noRomanized: '로마자 없음',
+    noTranslation: '번역 결과 없음'
+  }
+} as const;
+
+function getContentMessages(language: UiLanguage) {
+  return contentMessages[language] || contentMessages['zh-TW'];
+}
 
 interface SelectionRect {
   left: number;
@@ -33,11 +92,22 @@ let startX = 0;
 let startY = 0;
 let selectionBox: HTMLDivElement | null = null;
 
-void initializeFloatingButton();
+void initializeContentSettings();
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== 'local' || !changes.floatingButtonEnabled) return;
-  setFloatingButtonVisible(Boolean(changes.floatingButtonEnabled.newValue));
+  if (areaName !== 'local') return;
+  if (changes.uiLanguage?.newValue) {
+    uiLanguage = changes.uiLanguage.newValue as UiLanguage;
+    const floatingButton = document.querySelector(
+      '#manga-translator-floating-button'
+    );
+    if (floatingButton) {
+      floatingButton.textContent = getContentMessages(uiLanguage).floatingButton;
+    }
+  }
+  if (changes.floatingButtonEnabled) {
+    setFloatingButtonVisible(Boolean(changes.floatingButtonEnabled.newValue));
+  }
 });
 
 chrome.runtime.onMessage.addListener((message: MangaTranslatorMessage) => {
@@ -56,10 +126,15 @@ function clearResults() {
     .forEach((element) => element.remove());
 }
 
-async function initializeFloatingButton() {
-  const { floatingButtonEnabled = false } = await chrome.storage.local.get(
-    'floatingButtonEnabled'
-  );
+async function initializeContentSettings() {
+  const {
+    floatingButtonEnabled = false,
+    uiLanguage: storedLanguage = 'zh-TW'
+  } = await chrome.storage.local.get([
+    'floatingButtonEnabled',
+    UI_LANGUAGE_KEY
+  ]);
+  uiLanguage = storedLanguage as UiLanguage;
   setFloatingButtonVisible(Boolean(floatingButtonEnabled));
 }
 
@@ -70,8 +145,8 @@ function setFloatingButtonVisible(enabled: boolean) {
   const button = document.createElement('button');
   button.id = 'manga-translator-floating-button';
   button.type = 'button';
-  button.textContent = '框選翻譯';
-  button.title = '框選漫畫文字並翻譯';
+  button.textContent = getContentMessages(uiLanguage).floatingButton;
+  button.title = getContentMessages(uiLanguage).startSelection;
   button.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -96,7 +171,7 @@ function showToast(text: string, duration = 2200) {
 }
 
 function startSelectionMode() {
-  showToast('請拖曳框選漫畫文字區域');
+  showToast(getContentMessages(uiLanguage).selectArea);
   document.body.style.cursor = 'crosshair';
   window.addEventListener('mousedown', onMouseDown, true);
 }
@@ -157,11 +232,14 @@ async function onMouseUp(event: MouseEvent) {
   stopSelectionMode();
 
   if (rect.width < 8 || rect.height < 8) {
-    showToast('框選範圍太小');
+    showToast(getContentMessages(uiLanguage).areaTooSmall);
     return;
   }
 
-  const loadingToast = showToast('辨識與翻譯中...', 0);
+  const loadingToast = showToast(
+    getContentMessages(uiLanguage).translating,
+    0
+  );
   let result: TranslationResult;
 
   try {
@@ -252,10 +330,12 @@ async function translateImage(imageBase64: string): Promise<TranslationResult> {
     DICTIONARY_FILES_KEY,
     ACTIVE_DICTIONARY_KEY,
     CONTEXT_TRANSLATION_KEY,
-    HISTORY_KEY
+    HISTORY_KEY,
+    UI_LANGUAGE_KEY
   ]);
   const apiKey = String(settings[API_KEY_KEY] || '').trim();
   const model = String(settings[MODEL_KEY] || DEFAULT_MODEL);
+  const targetLanguage = (settings[UI_LANGUAGE_KEY] || 'zh-TW') as UiLanguage;
   const activeDictionaryId = settings[ACTIVE_DICTIONARY_KEY];
   const dictionaryFiles = Array.isArray(settings[DICTIONARY_FILES_KEY])
     ? settings[DICTIONARY_FILES_KEY]
@@ -310,7 +390,8 @@ async function translateImage(imageBase64: string): Promise<TranslationResult> {
     apiKey,
     model,
     dictionaryTitle: String(activeDictionary?.title || ''),
-    dictionaryEntries
+    dictionaryEntries,
+    targetLanguage
   };
 
   if (contextTranslationEnabled) {
@@ -386,7 +467,8 @@ function showResult(rect: SelectionRect, result: TranslationResult) {
   const toggleRomanized = document.createElement('button');
   toggleRomanized.className = 'manga-translator-romanized-toggle';
   toggleRomanized.type = 'button';
-  toggleRomanized.textContent = '顯示羅馬拼音';
+  const messages = getContentMessages(uiLanguage);
+  toggleRomanized.textContent = messages.showRomanized;
   const close = document.createElement('button');
   close.className = 'manga-translator-result-close';
   close.type = 'button';
@@ -397,20 +479,22 @@ function showResult(rect: SelectionRect, result: TranslationResult) {
   const originalText = document.createElement('div');
   originalText.className = 'manga-translator-result-line';
   originalText.textContent = formatResultText(
-    result.ocrText || '無辨識結果'
+    result.ocrText || messages.noOcr
   );
   const romanizedText = document.createElement('div');
   romanizedText.className =
     'manga-translator-result-line manga-translator-result-romanized is-hidden';
-  romanizedText.textContent = result.romanizedText || '無羅馬拼音';
+  romanizedText.textContent = result.romanizedText || messages.noRomanized;
   toggleRomanized.onclick = () => {
     const hidden = romanizedText.classList.toggle('is-hidden');
-    toggleRomanized.textContent = hidden ? '顯示羅馬拼音' : '隱藏羅馬拼音';
+    toggleRomanized.textContent = hidden
+      ? messages.showRomanized
+      : messages.hideRomanized;
   };
   const translatedText = document.createElement('div');
   translatedText.className = 'manga-translator-result-line';
   translatedText.textContent = formatResultText(
-    result.translatedText || result.text || '沒有翻譯結果'
+    result.translatedText || result.text || messages.noTranslation
   );
 
   content.append(originalText, romanizedText, translatedText);

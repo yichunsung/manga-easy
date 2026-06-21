@@ -4,6 +4,7 @@ import {
   deleteTranslationHistoryItem,
   getDictionaryState,
   getContextTranslationEnabled,
+  getUiLanguage,
   getTranslationHistory,
   MAX_DICTIONARY_ENTRIES,
   MAX_DICTIONARY_FILES,
@@ -13,10 +14,12 @@ import {
   subscribeToDictionaryState,
   subscribeToTranslationHistory
 } from '../shared/storage';
+import { getMessages } from '../shared/i18n';
 import type {
   DictionaryEntry,
   DictionaryFile,
-  TranslationHistoryItem
+  TranslationHistoryItem,
+  UiLanguage
 } from '../shared/types';
 
 const EMPTY_ENTRY: Omit<DictionaryEntry, 'id'> = {
@@ -53,6 +56,8 @@ export function SidePanelApp() {
   const [entryDraft, setEntryDraft] = useState(EMPTY_ENTRY);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>('zh-TW');
+  const messages = getMessages(uiLanguage);
 
   const selectedDictionary = useMemo(
     () =>
@@ -65,6 +70,7 @@ export function SidePanelApp() {
   useEffect(() => {
     void getTranslationHistory().then(setHistory);
     void getContextTranslationEnabled().then(setContextEnabled);
+    void getUiLanguage().then(setUiLanguage);
     void getDictionaryState().then((state) => {
       setDictionaries(state.files);
       setActiveId(state.activeDictionaryId);
@@ -80,10 +86,20 @@ export function SidePanelApp() {
           : null
       );
     });
+    const handleLanguageChange = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName === 'local' && changes.uiLanguage?.newValue) {
+        setUiLanguage(changes.uiLanguage.newValue as UiLanguage);
+      }
+    };
+    chrome.storage.onChanged.addListener(handleLanguageChange);
 
     return () => {
       unsubscribeHistory();
       unsubscribeDictionaries();
+      chrome.storage.onChanged.removeListener(handleLanguageChange);
     };
   }, []);
 
@@ -271,20 +287,21 @@ export function SidePanelApp() {
           type="button"
           onClick={() => setActiveTab('history')}
         >
-          翻譯紀錄
+          {messages.historyTab}
         </button>
         <button
           className={activeTab === 'dictionaries' ? 'is-active' : ''}
           type="button"
           onClick={() => setActiveTab('dictionaries')}
         >
-          字典檔設定
+          {messages.dictionaryTab}
         </button>
       </nav>
 
       {activeTab === 'history' ? (
         <HistoryPanel
           history={history}
+          messages={messages}
           contextEnabled={contextEnabled}
           onToggleContext={async () => {
             const enabled = !contextEnabled;
@@ -311,10 +328,12 @@ export function SidePanelApp() {
           onEditEntry={editEntry}
           onDeleteEntry={deleteEntry}
           onCancelEntry={resetEntryForm}
+          messages={messages}
         />
       ) : (
         <DictionaryList
           dictionaries={dictionaries}
+          messages={messages}
           activeDictionaryId={activeDictionaryId}
           newTitle={newDictionaryTitle}
           onNewTitleChange={setNewDictionaryTitle}
@@ -334,33 +353,35 @@ export function SidePanelApp() {
 function HistoryPanel({
   history,
   contextEnabled,
-  onToggleContext
+  onToggleContext,
+  messages
 }: {
   history: TranslationHistoryItem[];
   contextEnabled: boolean;
   onToggleContext: () => Promise<void>;
+  messages: ReturnType<typeof getMessages>;
 }) {
   return (
     <>
       <div className="heading">
-        <h1>翻譯紀錄</h1>
+        <h1>{messages.historyTitle}</h1>
         <button
           className="clear-button"
           type="button"
           disabled={history.length === 0}
           onClick={clearTranslationHistory}
         >
-          清除全部
+          {messages.clearAll}
         </button>
       </div>
       <p className="description">
-        完成框選翻譯後，原文與翻譯內容會自動儲存在這裡。
+        {messages.historyDescription}
       </p>
 
       <div className="context-translation-card">
         <div>
-          <strong>前後文翻譯</strong>
-          <p>開啟後，翻譯時會帶入最近 5 筆歷史內容。</p>
+          <strong>{messages.contextTranslation}</strong>
+          <p>{messages.contextHelp}</p>
         </div>
         <button
           className={contextEnabled ? 'context-toggle is-enabled' : 'context-toggle'}
@@ -368,12 +389,12 @@ function HistoryPanel({
           aria-pressed={contextEnabled}
           onClick={() => void onToggleContext()}
         >
-          {contextEnabled ? '已開啟' : '已關閉'}
+          {contextEnabled ? messages.enabled : messages.disabled}
         </button>
       </div>
 
       {history.length === 0 ? (
-        <p className="empty-state">目前還沒有翻譯紀錄。</p>
+        <p className="empty-state">{messages.noHistory}</p>
       ) : (
         <section className="history-list" aria-live="polite">
           {history.map((item) => (
@@ -385,16 +406,16 @@ function HistoryPanel({
                 <button
                   className="history-delete-button"
                   type="button"
-                  aria-label="刪除此筆翻譯紀錄"
-                  title="刪除此筆紀錄"
+                  aria-label={messages.delete}
+                  title={messages.delete}
                   onClick={() => void deleteTranslationHistoryItem(item.id)}
                 >
-                  刪除
+                  {messages.delete}
                 </button>
               </div>
-              <p className="field-label">原文</p>
+              <p className="field-label">{messages.original}</p>
               <p className="history-text">{item.originalText}</p>
-              <p className="field-label">翻譯</p>
+              <p className="field-label">{messages.translation}</p>
               <p className="history-text translated-text">
                 {item.translatedText}
               </p>
@@ -425,6 +446,7 @@ interface DictionaryListProps {
   onCreate: (event: FormEvent) => void;
   onOpen: (dictionaryId: string) => void;
   onActivate: (dictionaryId: string) => void;
+  messages: ReturnType<typeof getMessages>;
 }
 
 function DictionaryList({
@@ -434,25 +456,26 @@ function DictionaryList({
   onNewTitleChange,
   onCreate,
   onOpen,
-  onActivate
+  onActivate,
+  messages
 }: DictionaryListProps) {
   return (
     <>
       <div className="heading">
-        <h1>字典檔設定</h1>
+        <h1>{messages.dictionaryTitle}</h1>
         <span className="limit-badge">
           {dictionaries.length}/{MAX_DICTIONARY_FILES}
         </span>
       </div>
       <p className="description">
-        建立不同主題的翻譯字典，並選擇目前翻譯使用的字典檔。
+        {messages.dictionaryDescription}
       </p>
 
       <form className="create-dictionary-form" onSubmit={onCreate}>
         <input
           value={newTitle}
           maxLength={40}
-          placeholder="新字典檔標題"
+          placeholder={messages.newDictionary}
           disabled={dictionaries.length >= MAX_DICTIONARY_FILES}
           onChange={(event) => onNewTitleChange(event.target.value)}
         />
@@ -460,12 +483,12 @@ function DictionaryList({
           type="submit"
           disabled={dictionaries.length >= MAX_DICTIONARY_FILES}
         >
-          新增
+          {messages.add}
         </button>
       </form>
 
       {dictionaries.length === 0 ? (
-        <p className="empty-state">目前還沒有字典檔。</p>
+        <p className="empty-state">{messages.noDictionary}</p>
       ) : (
         <section className="dictionary-list">
           {dictionaries.map((dictionary) => {
@@ -479,10 +502,10 @@ function DictionaryList({
                 >
                   <span className="dictionary-title-row">
                     <strong>{dictionary.title}</strong>
-                    {isActive && <span className="active-badge">使用中</span>}
+                    {isActive && <span className="active-badge">{messages.active}</span>}
                   </span>
                   <span className="dictionary-meta">
-                    {dictionary.entries.length}/{MAX_DICTIONARY_ENTRIES} 筆
+                    {dictionary.entries.length}/{MAX_DICTIONARY_ENTRIES} {messages.entries}
                   </span>
                 </button>
                 {!isActive && (
@@ -491,7 +514,7 @@ function DictionaryList({
                     type="button"
                     onClick={() => onActivate(dictionary.id)}
                   >
-                    設為使用中
+                    {messages.setActive}
                   </button>
                 )}
               </article>
@@ -517,6 +540,7 @@ interface DictionaryEditorProps {
   onEditEntry: (entry: DictionaryEntry) => void;
   onDeleteEntry: (entryId: string) => void;
   onCancelEntry: () => void;
+  messages: ReturnType<typeof getMessages>;
 }
 
 function DictionaryEditor({
@@ -532,7 +556,8 @@ function DictionaryEditor({
   onSaveEntry,
   onEditEntry,
   onDeleteEntry,
-  onCancelEntry
+  onCancelEntry,
+  messages
 }: DictionaryEditorProps) {
   const [title, setTitle] = useState(dictionary.title);
 
@@ -542,7 +567,7 @@ function DictionaryEditor({
     <>
       <div className="editor-topbar">
         <button className="back-button" type="button" onClick={onBack}>
-          ← 返回
+          ← {messages.back}
         </button>
         <span className="limit-badge">
           {dictionary.entries.length}/{MAX_DICTIONARY_ENTRIES}
@@ -562,18 +587,18 @@ function DictionaryEditor({
           }}
         />
         {isActive ? (
-          <span className="active-badge">目前使用中</span>
+          <span className="active-badge">{messages.currentActive}</span>
         ) : (
           <button type="button" onClick={onActivate}>
-            設為使用中
+            {messages.setActive}
           </button>
         )}
       </div>
 
       <form className="entry-form" onSubmit={onSaveEntry}>
-        <h2>{editingEntryId ? '編輯詞條' : '新增詞條'}</h2>
+        <h2>{editingEntryId ? messages.entryEdit : messages.entryAdd}</h2>
         <label>
-          原文 *
+          {messages.originRequired}
           <input
             value={entryDraft.origin}
             maxLength={200}
@@ -587,7 +612,7 @@ function DictionaryEditor({
           />
         </label>
         <label>
-          翻譯值 *
+          {messages.valueRequired}
           <input
             value={entryDraft.value}
             maxLength={200}
@@ -602,7 +627,7 @@ function DictionaryEditor({
         </label>
         <div className="entry-form-row">
           <label>
-            類型
+            {messages.type}
             <select
               value={entryDraft.type}
               onChange={(event) =>
@@ -620,7 +645,7 @@ function DictionaryEditor({
             </select>
           </label>
           <label>
-            備註
+            {messages.note}
             <input
               value={entryDraft.note}
               maxLength={100}
@@ -643,18 +668,18 @@ function DictionaryEditor({
               dictionary.entries.length >= MAX_DICTIONARY_ENTRIES
             }
           >
-            {editingEntryId ? '儲存修改' : '新增詞條'}
+            {editingEntryId ? messages.saveChanges : messages.entryAdd}
           </button>
           {editingEntryId && (
             <button type="button" onClick={onCancelEntry}>
-              取消
+              {messages.cancel}
             </button>
           )}
         </div>
       </form>
 
       {dictionary.entries.length === 0 ? (
-        <p className="empty-state">此字典檔還沒有詞條。</p>
+        <p className="empty-state">{messages.noEntries}</p>
       ) : (
         <section className="entry-list">
           {dictionary.entries.map((entry, index) => (
@@ -674,14 +699,14 @@ function DictionaryEditor({
               </div>
               <div className="entry-actions">
                 <button type="button" onClick={() => onEditEntry(entry)}>
-                  編輯
+                  {messages.edit}
                 </button>
                 <button
                   className="entry-delete"
                   type="button"
                   onClick={() => onDeleteEntry(entry.id)}
                 >
-                  刪除
+                  {messages.delete}
                 </button>
               </div>
             </article>
@@ -690,7 +715,7 @@ function DictionaryEditor({
       )}
 
       <button className="delete-dictionary-button" type="button" onClick={onDelete}>
-        刪除此字典檔
+        {messages.deleteDictionary}
       </button>
     </>
   );

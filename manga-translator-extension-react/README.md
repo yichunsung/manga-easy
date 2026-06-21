@@ -13,6 +13,7 @@
 - Popup 開啟 Chrome Side Panel
 - Popup 設定及清除 OpenAI API Key
 - Popup 選擇 OpenAI 模型
+- 可選擇正體中文、簡體中文、英文或韓文；介面與翻譯目標語言會同步切換
 - 擷取目前可見分頁並裁切框選圖片
 - 呼叫 `POST http://localhost:8787/translate-image`
 - 驗證後端使用 MangaOCR

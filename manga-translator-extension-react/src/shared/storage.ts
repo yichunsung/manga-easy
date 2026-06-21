@@ -1,5 +1,6 @@
 import {
   OPENAI_MODELS,
+  UI_LANGUAGES,
   type DictionaryFile,
   type DictionaryState,
   type ExtensionSettings,
@@ -8,6 +9,7 @@ import {
 
 const API_KEY_KEY = 'openaiApiKey';
 const MODEL_KEY = 'openaiModel';
+const UI_LANGUAGE_KEY = 'uiLanguage';
 const HISTORY_KEY = 'translationHistory';
 const FLOATING_BUTTON_KEY = 'floatingButtonEnabled';
 const DICTIONARY_FILES_KEY = 'dictionaryFiles';
@@ -19,7 +21,8 @@ export const MAX_DICTIONARY_ENTRIES = 50;
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   openaiApiKey: '',
-  openaiModel: 'gpt-5.4-mini'
+  openaiModel: 'gpt-5.4-mini',
+  uiLanguage: 'zh-TW'
 };
 
 function ensureChromeStorage() {
@@ -30,9 +33,16 @@ function ensureChromeStorage() {
 
 export async function getSettings(): Promise<ExtensionSettings> {
   ensureChromeStorage();
-  const result = await chrome.storage.local.get([API_KEY_KEY, MODEL_KEY]);
+  const result = await chrome.storage.local.get([
+    API_KEY_KEY,
+    MODEL_KEY,
+    UI_LANGUAGE_KEY
+  ]);
   const storedModel = result[MODEL_KEY] as
     | ExtensionSettings['openaiModel']
+    | undefined;
+  const storedLanguage = result[UI_LANGUAGE_KEY] as
+    | ExtensionSettings['uiLanguage']
     | undefined;
   return {
     openaiApiKey: String(result[API_KEY_KEY] || ''),
@@ -40,7 +50,12 @@ export async function getSettings(): Promise<ExtensionSettings> {
       storedModel as ExtensionSettings['openaiModel']
     )
       ? (storedModel as ExtensionSettings['openaiModel'])
-      : DEFAULT_SETTINGS.openaiModel
+      : DEFAULT_SETTINGS.openaiModel,
+    uiLanguage: UI_LANGUAGES.includes(
+      storedLanguage as ExtensionSettings['uiLanguage']
+    )
+      ? (storedLanguage as ExtensionSettings['uiLanguage'])
+      : DEFAULT_SETTINGS.uiLanguage
   };
 }
 
@@ -48,8 +63,13 @@ export async function saveSettings(settings: ExtensionSettings) {
   ensureChromeStorage();
   await chrome.storage.local.set({
     [API_KEY_KEY]: settings.openaiApiKey,
-    [MODEL_KEY]: settings.openaiModel
+    [MODEL_KEY]: settings.openaiModel,
+    [UI_LANGUAGE_KEY]: settings.uiLanguage
   });
+}
+
+export async function getUiLanguage(): Promise<ExtensionSettings['uiLanguage']> {
+  return (await getSettings()).uiLanguage;
 }
 
 export async function clearApiKey() {

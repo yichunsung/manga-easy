@@ -19,9 +19,13 @@ export const OPENAI_MODELS = [
 
 export type OpenAiModel = (typeof OPENAI_MODELS)[number];
 
+export const UI_LANGUAGES = ['zh-TW', 'zh-CN', 'en', 'ko'] as const;
+export type UiLanguage = (typeof UI_LANGUAGES)[number];
+
 export interface ExtensionSettings {
   openaiApiKey: string;
   openaiModel: OpenAiModel;
+  uiLanguage: UiLanguage;
 }
 
 export interface TranslationHistoryItem {
