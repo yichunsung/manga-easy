@@ -52,10 +52,25 @@ ALLOWED_OPENAI_MODELS = {
 CHAT_COMPLETIONS_MODELS = {"gpt-4", "gpt-3.5-turbo"}
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 
-SYSTEM_PROMPT = """你是專業日文漫畫翻譯助手。
-請翻譯成台灣正體中文。
-必須遵守使用者提供的漫畫字典。
-不要輸出說明、註解或額外文字。"""
+TARGET_LANGUAGES = {
+    "zh-TW": {
+        "name": "台灣正體中文",
+        "unreadable": "看不清楚",
+    },
+    "zh-CN": {
+        "name": "简体中文",
+        "unreadable": "看不清楚",
+    },
+    "en": {
+        "name": "英文",
+        "unreadable": "Unreadable",
+    },
+    "ko": {
+        "name": "韓文",
+        "unreadable": "읽을 수 없음",
+    },
+}
+DEFAULT_TARGET_LANGUAGE = "zh-TW"
 
 
 class TranslateImageRequest(BaseModel):
@@ -66,6 +81,7 @@ class TranslateImageRequest(BaseModel):
     dictionaryEntries: Any = None
     contextTranslationEnabled: Any = False
     translationContext: Any = None
+    targetLanguage: Any = DEFAULT_TARGET_LANGUAGE
 
 
 def log(message: str) -> None:
@@ -154,6 +170,7 @@ def build_user_prompt(
     dictionary_lines: list[str],
     context_originals: list[str],
     context_translations: list[str],
+    target_language_name: str,
 ) -> str:
     glossary_text = "\n".join(dictionary_lines) if dictionary_lines else "無"
     context_text = ""
@@ -176,10 +193,17 @@ def build_user_prompt(
 2. 角色名、地名、組織名、招式名必須照字典翻譯。
 3. 沒有出現在字典中的詞，請依上下文自然翻譯。
 4. 保留漫畫對話的簡短、自然語氣。
-5. 只輸出正體中文翻譯。
+5. 只輸出{target_language_name}翻譯。
 
 【待翻譯日文】
 {ocr_text}"""
+
+
+def build_system_prompt(target_language_name: str) -> str:
+    return f"""你是專業日文漫畫翻譯助手。
+請翻譯成{target_language_name}。
+必須遵守使用者提供的漫畫字典。
+不要輸出說明、註解或額外文字。"""
 
 
 def get_translation_context(
@@ -228,12 +252,24 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
             detail=f"MangaOCR failed: {exc}",
         ) from exc
 
+    target_language = (
+        payload.targetLanguage
+        if isinstance(payload.targetLanguage, str)
+        and payload.targetLanguage in TARGET_LANGUAGES
+        else DEFAULT_TARGET_LANGUAGE
+    )
+    target_language_config = TARGET_LANGUAGES[target_language]
+    log(
+        f"Target language selected by user: "
+        f"{target_language} ({target_language_config['name']})"
+    )
+
     if not ocr_text:
         return {
             "ocrEngine": "manga-ocr",
             "ocrText": "",
             "romanizedText": "",
-            "translatedText": "看不清楚",
+            "translatedText": target_language_config["unreadable"],
         }
 
     romanized_text = romanize_japanese(ocr_text)
@@ -284,13 +320,15 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
             dictionary_lines,
             context_originals,
             context_translations,
+            target_language_config["name"],
         )
+        system_prompt = build_system_prompt(target_language_config["name"])
 
         if model in CHAT_COMPLETIONS_MODELS:
             response = await openai_client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
             )
@@ -300,7 +338,7 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
         else:
             response = await openai_client.responses.create(
                 model=model,
-                instructions=SYSTEM_PROMPT,
+                instructions=system_prompt,
                 input=user_prompt,
             )
             translated_text = response.output_text.strip()

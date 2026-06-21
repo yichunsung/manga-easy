@@ -101,6 +101,7 @@ Request：
   "imageBase64": "data:image/png;base64,...",
   "apiKey": "sk-...",
   "model": "gpt-5.4-mini",
+  "targetLanguage": "zh-TW",
   "dictionaryTitle": "角色名稱",
   "dictionaryEntries": [
     {

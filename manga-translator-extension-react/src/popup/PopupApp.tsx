@@ -52,7 +52,23 @@ export function PopupApp() {
         currentWindow: true
       });
       if (tab?.id === undefined) throw new Error('找不到目前分頁');
-      await chrome.tabs.sendMessage(tab.id, message);
+
+      try {
+        await chrome.tabs.sendMessage(tab.id, message);
+      } catch (error) {
+        if (!isMissingContentScriptError(error)) throw error;
+
+        await chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          files: ['content.css']
+        });
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        await chrome.tabs.sendMessage(tab.id, message);
+      }
+
       window.close();
     } catch (error) {
       console.error(error);
@@ -263,5 +279,13 @@ export function PopupApp() {
       <p className="status" role="status">{menuStatus}</p>
       <p className="footer">© 2026 漫畫翻譯擴充功能</p>
     </main>
+  );
+}
+
+function isMissingContentScriptError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes('Receiving end does not exist') ||
+    message.includes('Could not establish connection')
   );
 }
