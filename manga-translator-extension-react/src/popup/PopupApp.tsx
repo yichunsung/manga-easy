@@ -29,6 +29,7 @@ export function PopupApp() {
   const [settings, setSettings] =
     useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [floatingButtonEnabled, setFloatingEnabled] = useState(false);
+  const [currentTabId, setCurrentTabId] = useState<number>();
   const [currentWindowId, setCurrentWindowId] = useState<number>();
   const [menuStatus, setMenuStatus] = useState('');
   const [settingsStatus, setSettingsStatus] = useState('');
@@ -37,10 +38,16 @@ export function PopupApp() {
   useEffect(() => {
     void Promise.all([
       getSettings().then(setSettings),
-      getFloatingButtonEnabled().then(setFloatingEnabled),
       chrome.windows.getCurrent().then((window) => {
         setCurrentWindowId(window.id);
-      })
+      }),
+      chrome.tabs
+        .query({ active: true, currentWindow: true })
+        .then(async ([tab]) => {
+          if (tab?.id === undefined) return;
+          setCurrentTabId(tab.id);
+          setFloatingEnabled(await getFloatingButtonEnabled(tab.id));
+        })
     ]).catch((error: Error) => setMenuStatus(error.message));
   }, []);
 
@@ -79,8 +86,9 @@ export function PopupApp() {
   async function handleToggleFloatingButton() {
     setMenuStatus('');
     try {
+      if (currentTabId === undefined) throw new Error('找不到目前分頁');
       const enabled = !floatingButtonEnabled;
-      await setFloatingButtonEnabled(enabled);
+      await setFloatingButtonEnabled(currentTabId, enabled);
       setFloatingEnabled(enabled);
       await sendToActiveTab({
         type: 'MANGA_TRANSLATOR_SET_FLOATING_BUTTON',

@@ -9,7 +9,7 @@
 
 - Popup「框選翻譯」
 - 一鍵清除目前頁面的翻譯面板
-- 開啟或關閉網頁右下角常駐框選按鈕
+- 依分頁開啟或關閉右下角常駐框選按鈕；不會影響其他分頁
 - Popup 開啟 Chrome Side Panel
 - Popup 設定及清除 OpenAI API Key
 - Popup 選擇 OpenAI 模型

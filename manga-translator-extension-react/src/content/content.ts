@@ -91,6 +91,9 @@ let selecting = false;
 let startX = 0;
 let startY = 0;
 let selectionBox: HTMLDivElement | null = null;
+let selectionOverlay: HTMLDivElement | null = null;
+let activeTranslationTasks = 0;
+let sharedLoadingToast: HTMLDivElement | null = null;
 
 void initializeContentSettings();
 
@@ -104,9 +107,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (floatingButton) {
       floatingButton.textContent = getContentMessages(uiLanguage).floatingButton;
     }
-  }
-  if (changes.floatingButtonEnabled) {
-    setFloatingButtonVisible(Boolean(changes.floatingButtonEnabled.newValue));
   }
 });
 
@@ -127,15 +127,22 @@ function clearResults() {
 }
 
 async function initializeContentSettings() {
-  const {
-    floatingButtonEnabled = false,
-    uiLanguage: storedLanguage = 'zh-TW'
-  } = await chrome.storage.local.get([
-    'floatingButtonEnabled',
-    UI_LANGUAGE_KEY
-  ]);
+  const { uiLanguage: storedLanguage = 'zh-TW' } =
+    await chrome.storage.local.get(UI_LANGUAGE_KEY);
   uiLanguage = storedLanguage as UiLanguage;
-  setFloatingButtonVisible(Boolean(floatingButtonEnabled));
+
+  try {
+    const response = (await chrome.runtime.sendMessage({
+      type: 'MANGA_TRANSLATOR_GET_FLOATING_BUTTON_STATE'
+    } satisfies MangaTranslatorMessage)) as {
+      ok?: boolean;
+      enabled?: boolean;
+    };
+    setFloatingButtonVisible(Boolean(response?.ok && response.enabled));
+  } catch (error) {
+    console.error('無法取得目前分頁的常駐按鈕狀態', error);
+    setFloatingButtonVisible(false);
+  }
 }
 
 function setFloatingButtonVisible(enabled: boolean) {
@@ -156,7 +163,10 @@ function setFloatingButtonVisible(enabled: boolean) {
 }
 
 function showToast(text: string, duration = 2200) {
-  document.querySelector('.manga-translator-toast')?.remove();
+  const existingToast = document.querySelector<HTMLDivElement>(
+    '.manga-translator-toast'
+  );
+  if (existingToast) return existingToast;
 
   const element = document.createElement('div');
   element.className = 'manga-translator-toast';
@@ -171,30 +181,65 @@ function showToast(text: string, duration = 2200) {
 }
 
 function startSelectionMode() {
+  stopSelectionMode();
   showToast(getContentMessages(uiLanguage).selectArea);
-  document.body.style.cursor = 'crosshair';
-  window.addEventListener('mousedown', onMouseDown, true);
+
+  selectionOverlay = document.createElement('div');
+  selectionOverlay.id = 'manga-translator-selection-overlay';
+  selectionOverlay.addEventListener('mousedown', onMouseDown, true);
+  document.documentElement.appendChild(selectionOverlay);
+
+  moveExtensionUiAboveOverlay();
+
+  window.addEventListener('keydown', onSelectionKeyDown, true);
 }
 
-function stopSelectionMode() {
+function moveExtensionUiAboveOverlay() {
+  document
+    .querySelectorAll<HTMLElement>(
+      [
+        '#manga-translator-floating-button',
+        '.manga-translator-result',
+        '.manga-translator-toast'
+      ].join(',')
+    )
+    .forEach((element) => document.documentElement.appendChild(element));
+}
+
+function stopSelectionMode(options: { keepOverlay?: boolean } = {}) {
+  document.documentElement.style.cursor = '';
   document.body.style.cursor = '';
-  window.removeEventListener('mousedown', onMouseDown, true);
+  if (options.keepOverlay && selectionOverlay) {
+    selectionOverlay.classList.add('is-capturing');
+  }
+  selectionOverlay?.removeEventListener('mousedown', onMouseDown, true);
   window.removeEventListener('mousemove', onMouseMove, true);
   window.removeEventListener('mouseup', onMouseUp, true);
+  window.removeEventListener('keydown', onSelectionKeyDown, true);
   selecting = false;
   selectionBox?.remove();
   selectionBox = null;
+
+  if (!options.keepOverlay) {
+    selectionOverlay?.remove();
+    selectionOverlay = null;
+  }
+}
+
+function onSelectionKeyDown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopPropagation();
+  document
+    .querySelector(
+      '.manga-translator-toast:not(.manga-translator-shared-loading)'
+    )
+    ?.remove();
+  stopSelectionMode();
 }
 
 function onMouseDown(event: MouseEvent) {
-  const target = event.target;
-  if (
-    event.button !== 0 ||
-    (target instanceof Element &&
-      target.closest('#manga-translator-floating-button'))
-  ) {
-    return;
-  }
+  if (event.button !== 0) return;
 
   event.preventDefault();
   event.stopPropagation();
@@ -204,7 +249,7 @@ function onMouseDown(event: MouseEvent) {
 
   selectionBox = document.createElement('div');
   selectionBox.id = 'manga-translator-selection-box';
-  document.body.appendChild(selectionBox);
+  document.documentElement.appendChild(selectionBox);
   updateBox(startX, startY, startX, startY);
 
   window.addEventListener('mousemove', onMouseMove, true);
@@ -229,31 +274,75 @@ async function onMouseUp(event: MouseEvent) {
     event.clientX,
     event.clientY
   );
-  stopSelectionMode();
+  const completedOverlay = selectionOverlay;
+  stopSelectionMode({ keepOverlay: true });
 
   if (rect.width < 8 || rect.height < 8) {
+    removeSelectionOverlay(completedOverlay);
     showToast(getContentMessages(uiLanguage).areaTooSmall);
     return;
   }
 
-  const loadingToast = showToast(
-    getContentMessages(uiLanguage).translating,
-    0
-  );
+  try {
+    const imageBase64 = await captureAndCrop(rect);
+    removeSelectionOverlay(completedOverlay);
+    void runTranslationTask(rect, imageBase64);
+  } catch (error) {
+    removeSelectionOverlay(completedOverlay);
+    const message = error instanceof Error ? error.message : String(error);
+    showResult(rect, { translatedText: `失敗：${message}` });
+  }
+}
+
+async function runTranslationTask(
+  rect: SelectionRect,
+  imageBase64: string
+) {
+  beginTranslationTask();
   let result: TranslationResult;
 
   try {
-    const imageBase64 = await captureAndCrop(rect);
     result = await translateImage(imageBase64);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     result = { translatedText: `失敗：${message}` };
   } finally {
-    loadingToast.remove();
+    finishTranslationTask();
   }
 
   showResult(rect, result);
   await saveTranslationHistory(result);
+}
+
+function beginTranslationTask() {
+  activeTranslationTasks += 1;
+  if (sharedLoadingToast?.isConnected) return;
+  if (document.querySelector('.manga-translator-toast')) return;
+
+  sharedLoadingToast = document.createElement('div');
+  sharedLoadingToast.className =
+    'manga-translator-toast manga-translator-shared-loading';
+  sharedLoadingToast.textContent = getContentMessages(uiLanguage).translating;
+  document.documentElement.appendChild(sharedLoadingToast);
+}
+
+function finishTranslationTask() {
+  activeTranslationTasks = Math.max(0, activeTranslationTasks - 1);
+  if (activeTranslationTasks > 0) return;
+
+  sharedLoadingToast?.remove();
+  sharedLoadingToast = null;
+}
+
+function removeSelectionOverlay(
+  overlay: HTMLDivElement | null = selectionOverlay
+) {
+  overlay?.remove();
+  document.documentElement.style.cursor = '';
+  document.body.style.cursor = '';
+  if (selectionOverlay === overlay) {
+    selectionOverlay = null;
+  }
 }
 
 function updateBox(x1: number, y1: number, x2: number, y2: number) {
@@ -500,7 +589,7 @@ function showResult(rect: SelectionRect, result: TranslationResult) {
   content.append(originalText, romanizedText, translatedText);
   actions.append(toggleRomanized, close);
   element.append(actions, content);
-  document.body.appendChild(element);
+  document.documentElement.appendChild(element);
   makeDraggable(element);
 }
 

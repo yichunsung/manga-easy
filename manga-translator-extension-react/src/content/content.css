@@ -1,3 +1,23 @@
+#manga-translator-selection-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483646 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  cursor: crosshair !important;
+  pointer-events: auto !important;
+  user-select: none !important;
+  touch-action: none !important;
+}
+
+#manga-translator-selection-overlay.is-capturing {
+  cursor: default !important;
+}
+
 #manga-translator-selection-box {
   position: fixed;
   border: 2px solid #00a3ff;
@@ -63,6 +83,7 @@
 .manga-translator-toast {
   right: 20px;
   top: 20px;
+  pointer-events: none;
 }
 
 .manga-translator-result {

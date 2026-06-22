@@ -41,6 +41,7 @@ export type MangaTranslatorMessage =
   | { type: 'MANGA_TRANSLATOR_START_SELECT' }
   | { type: 'MANGA_TRANSLATOR_CLEAR_RESULTS' }
   | { type: 'MANGA_TRANSLATOR_SET_FLOATING_BUTTON'; enabled: boolean }
+  | { type: 'MANGA_TRANSLATOR_GET_FLOATING_BUTTON_STATE' }
   | { type: 'MANGA_TRANSLATOR_CAPTURE' };
 
 export interface TranslationResult {

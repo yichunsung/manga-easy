@@ -11,7 +11,7 @@ const API_KEY_KEY = 'openaiApiKey';
 const MODEL_KEY = 'openaiModel';
 const UI_LANGUAGE_KEY = 'uiLanguage';
 const HISTORY_KEY = 'translationHistory';
-const FLOATING_BUTTON_KEY = 'floatingButtonEnabled';
+const FLOATING_BUTTON_TABS_KEY = 'floatingButtonTabs';
 const DICTIONARY_FILES_KEY = 'dictionaryFiles';
 const ACTIVE_DICTIONARY_KEY = 'activeDictionaryId';
 const CONTEXT_TRANSLATION_KEY = 'contextTranslationEnabled';
@@ -98,15 +98,27 @@ export async function deleteTranslationHistoryItem(
   });
 }
 
-export async function getFloatingButtonEnabled(): Promise<boolean> {
-  ensureChromeStorage();
-  const result = await chrome.storage.local.get(FLOATING_BUTTON_KEY);
-  return Boolean(result[FLOATING_BUTTON_KEY]);
+export async function getFloatingButtonEnabled(tabId: number): Promise<boolean> {
+  const result = await chrome.storage.session.get(FLOATING_BUTTON_TABS_KEY);
+  const tabs = normalizeFloatingButtonTabs(result[FLOATING_BUTTON_TABS_KEY]);
+  return Boolean(tabs[String(tabId)]);
 }
 
-export async function setFloatingButtonEnabled(enabled: boolean): Promise<void> {
-  ensureChromeStorage();
-  await chrome.storage.local.set({ [FLOATING_BUTTON_KEY]: enabled });
+export async function setFloatingButtonEnabled(
+  tabId: number,
+  enabled: boolean
+): Promise<void> {
+  const result = await chrome.storage.session.get(FLOATING_BUTTON_TABS_KEY);
+  const tabs = normalizeFloatingButtonTabs(result[FLOATING_BUTTON_TABS_KEY]);
+  const key = String(tabId);
+
+  if (enabled) {
+    tabs[key] = true;
+  } else {
+    delete tabs[key];
+  }
+
+  await chrome.storage.session.set({ [FLOATING_BUTTON_TABS_KEY]: tabs });
 }
 
 export async function getContextTranslationEnabled(): Promise<boolean> {
@@ -261,4 +273,13 @@ function normalizeDictionaryFiles(value: unknown): DictionaryFile[] {
         updatedAt: typeof file.updatedAt === 'string' ? file.updatedAt : now
       };
     });
+}
+
+function normalizeFloatingButtonTabs(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      ([key, enabled]) => /^\d+$/.test(key) && enabled === true
+    )
+  );
 }
