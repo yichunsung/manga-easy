@@ -2,6 +2,7 @@ fastapi
 uvicorn
 python-dotenv
 openai
+anthropic
 pillow
 numpy<2
 manga-ocr==0.1.14

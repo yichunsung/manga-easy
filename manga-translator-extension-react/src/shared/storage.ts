@@ -1,5 +1,5 @@
 import {
-  OPENAI_MODELS,
+  TRANSLATION_MODELS,
   UI_LANGUAGES,
   type DictionaryFile,
   type DictionaryState,
@@ -46,7 +46,7 @@ export async function getSettings(): Promise<ExtensionSettings> {
     | undefined;
   return {
     openaiApiKey: String(result[API_KEY_KEY] || ''),
-    openaiModel: OPENAI_MODELS.includes(
+    openaiModel: TRANSLATION_MODELS.includes(
       storedModel as ExtensionSettings['openaiModel']
     )
       ? (storedModel as ExtensionSettings['openaiModel'])

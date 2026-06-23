@@ -1,5 +1,7 @@
 # Manga Translator Extension React
 
+![天空封面](./public/images/sky-cover.png)
+
 原版 Chrome Extension 的 React + TypeScript + Vite 移植版。
 
 `manga-translator-extension` 保持獨立；此專案的程式、建置與輸出都位於

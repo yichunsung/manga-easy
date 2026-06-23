@@ -1,7 +1,7 @@
 # Manga OCR Service
 
 以 FastAPI 提供日文漫畫圖片 OCR 與台灣正體中文翻譯服務。圖片會先由
-MangaOCR 辨識日文，再透過 OpenAI Responses API 翻譯。
+MangaOCR 辨識日文，再透過 OpenAI 或 Claude API 翻譯。
 
 這是 `manga-translator-extension` 目前建議使用的主要後端。
 
@@ -11,13 +11,13 @@ MangaOCR 辨識日文，再透過 OpenAI Responses API 翻譯。
 2. 使用 Pillow 解碼並轉換為 RGB 圖片。
 3. 使用全域單例 MangaOCR 模型辨識日文。
 4. 將日文讀音轉換成羅馬拼音。
-5. 將 OCR 文字交由 OpenAI 翻譯成台灣正體中文。
+5. 將 OCR 文字交由使用者選擇的 OpenAI 或 Claude 模型翻譯。
 6. 回傳 OCR 原文、羅馬拼音與翻譯結果。
 
 ## 環境需求
 
 - Python 3.10 以上
-- OpenAI API Key
+- OpenAI 或 Anthropic API Key
 - 首次下載 MangaOCR 模型時需要網路連線
 
 ## 安裝方式
@@ -52,10 +52,12 @@ cp .env.example .env
 ```dotenv
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-5.4-mini
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
-`OPENAI_API_KEY` 可作為後端 fallback。Extension 也可在每次 request 傳入
-`apiKey` 與 `model`。`OPENAI_MODEL` 未設定時會使用
+`OPENAI_API_KEY` 與 `ANTHROPIC_API_KEY` 可作為對應 provider 的後端
+fallback。Extension 也可在每次 request 傳入 `apiKey` 與 `model`；
+後端會依模型名稱選擇 OpenAI 或 Anthropic SDK。`OPENAI_MODEL` 未設定時會使用
 `gpt-5.4-mini`。
 
 ## 啟動方式

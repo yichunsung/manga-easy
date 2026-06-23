@@ -8,6 +8,7 @@ from typing import Any
 
 import fugashi
 import jaconv
+from anthropic import AsyncAnthropic, OverloadedError
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -49,6 +50,12 @@ ALLOWED_OPENAI_MODELS = {
     "gpt-4",
     "gpt-3.5-turbo",
 }
+ALLOWED_CLAUDE_MODELS = {
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+}
+ALLOWED_MODELS = ALLOWED_OPENAI_MODELS | ALLOWED_CLAUDE_MODELS
 CHAT_COMPLETIONS_MODELS = {"gpt-4", "gpt-3.5-turbo"}
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 
@@ -279,24 +286,29 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
         if isinstance(payload.apiKey, str)
         else ""
     )
-    api_key = request_api_key or os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="OpenAI API Key is not configured",
-        )
-
     model = (
         payload.model.strip()
         if isinstance(payload.model, str) and payload.model.strip()
         else os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
     )
-    if model not in ALLOWED_OPENAI_MODELS:
-        raise HTTPException(status_code=400, detail="Unsupported OpenAI model")
-    log(f"OpenAI model selected by user: {model}")
+    if model not in ALLOWED_MODELS:
+        raise HTTPException(status_code=400, detail="Unsupported translation model")
+
+    provider = "Claude" if model in ALLOWED_CLAUDE_MODELS else "OpenAI"
+    fallback_key_name = (
+        "ANTHROPIC_API_KEY"
+        if provider == "Claude"
+        else "OPENAI_API_KEY"
+    )
+    api_key = request_api_key or os.getenv(fallback_key_name, "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider} API Key is not configured",
+        )
+    log(f"{provider} model selected by user: {model}")
 
     try:
-        openai_client = AsyncOpenAI(api_key=api_key)
         dictionary_lines = get_matching_dictionary_lines(
             payload.dictionaryEntries,
             ocr_text,
@@ -324,7 +336,21 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
         )
         system_prompt = build_system_prompt(target_language_config["name"])
 
-        if model in CHAT_COMPLETIONS_MODELS:
+        if model in ALLOWED_CLAUDE_MODELS:
+            anthropic_client = AsyncAnthropic(api_key=api_key)
+            response = await anthropic_client.messages.create(
+                model=model,
+                max_tokens=2048,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            translated_text = "".join(
+                block.text
+                for block in response.content
+                if block.type == "text"
+            ).strip()
+        elif model in CHAT_COMPLETIONS_MODELS:
+            openai_client = AsyncOpenAI(api_key=api_key)
             response = await openai_client.chat.completions.create(
                 model=model,
                 messages=[
@@ -336,6 +362,7 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
                 response.choices[0].message.content or ""
             ).strip()
         else:
+            openai_client = AsyncOpenAI(api_key=api_key)
             response = await openai_client.responses.create(
                 model=model,
                 instructions=system_prompt,
@@ -343,10 +370,19 @@ async def translate_image(payload: TranslateImageRequest) -> dict[str, str]:
             )
             translated_text = response.output_text.strip()
         log("Translation completed")
+    except OverloadedError as exc:
+        log(f"Claude model overloaded: {model} ({exc.request_id})")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "model_overloaded",
+                "message": "目前模型服務異常，請更換模型後再試",
+            },
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"OpenAI translation failed: {exc}",
+            detail=f"{provider} translation failed: {exc}",
         ) from exc
 
     return {

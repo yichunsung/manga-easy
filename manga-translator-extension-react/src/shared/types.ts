@@ -17,14 +17,25 @@ export const OPENAI_MODELS = [
   'gpt-3.5-turbo'
 ] as const;
 
-export type OpenAiModel = (typeof OPENAI_MODELS)[number];
+export const CLAUDE_MODELS = [
+  'claude-opus-4-8',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5'
+] as const;
+
+export const TRANSLATION_MODELS = [
+  ...OPENAI_MODELS,
+  ...CLAUDE_MODELS
+] as const;
+
+export type TranslationModel = (typeof TRANSLATION_MODELS)[number];
 
 export const UI_LANGUAGES = ['zh-TW', 'zh-CN', 'en', 'ko'] as const;
 export type UiLanguage = (typeof UI_LANGUAGES)[number];
 
 export interface ExtensionSettings {
   openaiApiKey: string;
-  openaiModel: OpenAiModel;
+  openaiModel: TranslationModel;
   uiLanguage: UiLanguage;
 }
 

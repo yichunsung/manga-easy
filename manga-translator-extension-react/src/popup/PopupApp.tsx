@@ -9,19 +9,23 @@ import {
 } from '../shared/storage';
 import { getMessages, LANGUAGE_OPTIONS } from '../shared/i18n';
 import {
+  CLAUDE_MODELS,
   OPENAI_MODELS,
   type ExtensionSettings,
   type MangaTranslatorMessage,
-  type OpenAiModel,
+  type TranslationModel,
   type UiLanguage
 } from '../shared/types';
 
-const MODEL_LABELS: Partial<Record<OpenAiModel, string>> = {
+const MODEL_LABELS: Partial<Record<TranslationModel, string>> = {
   'gpt-5.5': 'GPT-5.5（品質優先）',
   'gpt-5.4-mini': 'GPT-5.4 mini（建議）',
   'gpt-5.4-nano': 'GPT-5.4 nano（速度與成本優先）',
   'gpt-4': 'GPT-4（舊版、文字模型）',
-  'gpt-3.5-turbo': 'GPT-3.5 Turbo（舊版、文字模型）'
+  'gpt-3.5-turbo': 'GPT-3.5 Turbo（舊版、文字模型）',
+  'claude-opus-4-8': 'Claude Opus 4.8（品質優先）',
+  'claude-sonnet-4-6': 'Claude Sonnet 4.6（建議）',
+  'claude-haiku-4-5': 'Claude Haiku 4.5（速度與成本優先）'
 };
 
 export function PopupApp() {
@@ -164,7 +168,11 @@ export function PopupApp() {
             id="api-key"
             type="password"
             value={settings.openaiApiKey}
-            placeholder="sk-..."
+            placeholder={
+              settings.openaiModel.startsWith('claude-')
+                ? 'sk-ant-...'
+                : 'sk-...'
+            }
             autoComplete="off"
             spellCheck={false}
             autoFocus
@@ -186,15 +194,24 @@ export function PopupApp() {
             onChange={(event) =>
               setSettings((current) => ({
                 ...current,
-                openaiModel: event.target.value as OpenAiModel
+                openaiModel: event.target.value as TranslationModel
               }))
             }
           >
-            {OPENAI_MODELS.map((model) => (
-              <option key={model} value={model}>
-                {MODEL_LABELS[model] || model}
-              </option>
-            ))}
+            <optgroup label="OpenAI">
+              {OPENAI_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {MODEL_LABELS[model] || model}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Claude">
+              {CLAUDE_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {MODEL_LABELS[model] || model}
+                </option>
+              ))}
+            </optgroup>
           </select>
 
           <label htmlFor="ui-language">{messages.language}</label>

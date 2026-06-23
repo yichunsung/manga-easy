@@ -30,7 +30,8 @@ const contentMessages = {
     hideRomanized: '隱藏羅馬拼音',
     noOcr: '無辨識結果',
     noRomanized: '無羅馬拼音',
-    noTranslation: '沒有翻譯結果'
+    noTranslation: '沒有翻譯結果',
+    modelUnavailable: '目前模型服務異常，請更換模型後再試'
   },
   'zh-CN': {
     floatingButton: '框选翻译',
@@ -42,7 +43,8 @@ const contentMessages = {
     hideRomanized: '隐藏罗马拼音',
     noOcr: '无识别结果',
     noRomanized: '无罗马拼音',
-    noTranslation: '没有翻译结果'
+    noTranslation: '没有翻译结果',
+    modelUnavailable: '当前模型服务异常，请更换模型后重试'
   },
   en: {
     floatingButton: 'Select and translate',
@@ -54,7 +56,8 @@ const contentMessages = {
     hideRomanized: 'Hide romanization',
     noOcr: 'No OCR result',
     noRomanized: 'No romanization',
-    noTranslation: 'No translation result'
+    noTranslation: 'No translation result',
+    modelUnavailable: 'This model is currently unavailable. Select another model and try again.'
   },
   ko: {
     floatingButton: '영역 선택 번역',
@@ -66,7 +69,8 @@ const contentMessages = {
     hideRomanized: '로마자 숨기기',
     noOcr: '인식 결과 없음',
     noRomanized: '로마자 없음',
-    noTranslation: '번역 결과 없음'
+    noTranslation: '번역 결과 없음',
+    modelUnavailable: '현재 모델 서비스에 문제가 있습니다. 다른 모델로 변경한 후 다시 시도하세요.'
   }
 } as const;
 
@@ -471,7 +475,7 @@ async function translateImage(imageBase64: string): Promise<TranslationResult> {
     : [];
 
   if (!apiKey) {
-    throw new Error('請先在擴充功能 Popup 的設定頁輸入 OpenAI API Key');
+    throw new Error('請先在擴充功能 Popup 的設定頁輸入所選模型的 API Key');
   }
 
   const requestBody: Record<string, unknown> = {
@@ -496,10 +500,24 @@ async function translateImage(imageBase64: string): Promise<TranslationResult> {
 
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => null)) as
-      | { detail?: string; error?: string }
+      | {
+          detail?: string | { code?: string; message?: string };
+          error?: string;
+        }
       | null;
+    if (
+      response.status === 503 &&
+      typeof errorBody?.detail === 'object' &&
+      errorBody.detail?.code === 'model_overloaded'
+    ) {
+      throw new Error(getContentMessages(uiLanguage).modelUnavailable);
+    }
+    const detail =
+      typeof errorBody?.detail === 'string'
+        ? errorBody.detail
+        : errorBody?.detail?.message;
     throw new Error(
-      errorBody?.detail || errorBody?.error || `API ${response.status}`
+      detail || errorBody?.error || `API ${response.status}`
     );
   }
 
